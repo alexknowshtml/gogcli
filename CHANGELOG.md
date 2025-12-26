@@ -1,11 +1,12 @@
 # Changelog
 
-## 0.3.1 - Unreleased
+## 0.4.0 - Unreleased
 
 ### Added
 
 - Resilience: automatic retries + circuit breaker for Google API calls (429/5xx).
 - Gmail: batch ops + settings commands (autoforward, delegates, filters, forwarding, send-as, vacation).
+- Gmail: `gog gmail thread --download --out-dir ...` for saving thread attachments to a specific directory.
 - Calendar: colors, conflicts, search, multi-timezone time.
 - Sheets: read/write/update/append/clear + create spreadsheets.
 - Drive: `gog drive download --format ...` for Google Docs exports (e.g. Sheets to PDF/XLSX, Docs to PDF/DOCX/TXT, Slides to PDF/PPTX).
@@ -16,6 +17,7 @@
 ### Fixed
 
 - Gmail: `gog gmail attachment` download now works reliably; avoid re-fetching payload for filename inference and accept padded base64 responses.
+- Gmail: `gog gmail thread --download` now saves attachments to the current directory by default and creates missing output directories.
 - Sheets: avoid flag collision with global `--json`; values input flag is now `--values-json` for `sheets update|append`.
 
 ### Changed

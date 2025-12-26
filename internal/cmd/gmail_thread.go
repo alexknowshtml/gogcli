@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/steipete/gogcli/internal/config"
 	"github.com/steipete/gogcli/internal/outfmt"
 	"github.com/steipete/gogcli/internal/ui"
 	"google.golang.org/api/gmail/v1"
@@ -18,6 +17,7 @@ import (
 
 func newGmailThreadCmd(flags *rootFlags) *cobra.Command {
 	var download bool
+	var outDir string
 
 	cmd := &cobra.Command{
 		Use:   "thread <threadId>",
@@ -40,6 +40,17 @@ func newGmailThreadCmd(flags *rootFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
+
+			var attachDir string
+			if download {
+				if strings.TrimSpace(outDir) == "" {
+					// Default: current directory, not gogcli config dir.
+					attachDir = "."
+				} else {
+					attachDir = filepath.Clean(outDir)
+				}
+			}
+
 			if outfmt.IsJSON(cmd.Context()) {
 				type downloaded struct {
 					MessageID     string `json:"messageId"`
@@ -53,16 +64,12 @@ func newGmailThreadCmd(flags *rootFlags) *cobra.Command {
 				}
 				downloadedFiles := make([]downloaded, 0)
 				if download && thread != nil {
-					d, err := config.EnsureGmailAttachmentsDir()
-					if err != nil {
-						return err
-					}
 					for _, msg := range thread.Messages {
 						if msg == nil || msg.Id == "" {
 							continue
 						}
 						for _, a := range collectAttachments(msg.Payload) {
-							outPath, cached, err := downloadAttachment(cmd, svc, msg.Id, a, d)
+							outPath, cached, err := downloadAttachment(cmd, svc, msg.Id, a, attachDir)
 							if err != nil {
 								return err
 							}
@@ -87,15 +94,6 @@ func newGmailThreadCmd(flags *rootFlags) *cobra.Command {
 			if thread == nil || len(thread.Messages) == 0 {
 				u.Err().Println("Empty thread")
 				return nil
-			}
-
-			var attachDir string
-			if download {
-				d, err := config.EnsureGmailAttachmentsDir()
-				if err != nil {
-					return err
-				}
-				attachDir = d
 			}
 
 			for _, msg := range thread.Messages {
@@ -145,6 +143,7 @@ func newGmailThreadCmd(flags *rootFlags) *cobra.Command {
 	}
 
 	cmd.Flags().BoolVar(&download, "download", false, "Download attachments")
+	cmd.Flags().StringVar(&outDir, "out-dir", "", "Directory to write attachments to (default: current directory)")
 	return cmd
 }
 
@@ -246,6 +245,9 @@ func downloadAttachment(cmd *cobra.Command, svc *gmail.Service, messageID string
 	if strings.TrimSpace(messageID) == "" || strings.TrimSpace(a.AttachmentID) == "" {
 		return "", false, errors.New("missing messageID/attachmentID")
 	}
+	if strings.TrimSpace(dir) == "" {
+		dir = "."
+	}
 	shortID := a.AttachmentID
 	if len(shortID) > 8 {
 		shortID = shortID[:8]
@@ -257,24 +259,9 @@ func downloadAttachment(cmd *cobra.Command, svc *gmail.Service, messageID string
 	}
 	filename := fmt.Sprintf("%s_%s_%s", messageID, shortID, safeFilename)
 	outPath := filepath.Join(dir, filename)
-
-	if st, err := os.Stat(outPath); err == nil && st.Size() == a.Size && a.Size > 0 {
-		return outPath, true, nil
-	}
-
-	body, err := svc.Users.Messages.Attachments.Get("me", messageID, a.AttachmentID).Context(cmd.Context()).Do()
+	path, cached, _, err := downloadAttachmentToPath(cmd, svc, messageID, a.AttachmentID, outPath, a.Size)
 	if err != nil {
 		return "", false, err
 	}
-	if body == nil || body.Data == "" {
-		return "", false, errors.New("empty attachment data")
-	}
-	data, err := base64.RawURLEncoding.DecodeString(body.Data)
-	if err != nil {
-		return "", false, err
-	}
-	if err := os.WriteFile(outPath, data, 0o600); err != nil {
-		return "", false, err
-	}
-	return outPath, false, nil
+	return path, cached, nil
 }

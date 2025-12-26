@@ -7,10 +7,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/steipete/gogcli/internal/config"
 	"google.golang.org/api/gmail/v1"
 	"google.golang.org/api/option"
 )
@@ -22,6 +22,12 @@ func TestExecute_GmailThreadDraftsSend_JSON(t *testing.T) {
 	// Keep attachments out of real config.
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	wd := t.TempDir()
+	origWD, _ := os.Getwd()
+	t.Cleanup(func() { _ = os.Chdir(origWD) })
+	if err := os.Chdir(wd); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
 
 	attData := []byte("hello")
 	attEncoded := base64.RawURLEncoding.EncodeToString(attData)
@@ -137,14 +143,14 @@ func TestExecute_GmailThreadDraftsSend_JSON(t *testing.T) {
 			t.Fatalf("unexpected out=%q", out)
 		}
 
-		// Verify attachment written under temp config dir.
-		attachDir, err := config.GmailAttachmentsDir()
+		// Verify attachment written to current directory (default).
+		expectedPath := filepath.Join(wd, "m1_a1_a.txt")
+		b, err := os.ReadFile(expectedPath)
 		if err != nil {
-			t.Fatalf("GmailAttachmentsDir: %v", err)
+			t.Fatalf("ReadFile: %v", err)
 		}
-		entries, readErr := os.ReadDir(attachDir)
-		if readErr != nil || len(entries) == 0 {
-			t.Fatalf("expected attachment file, err=%v entries=%d", readErr, len(entries))
+		if string(b) != string(attData) {
+			t.Fatalf("content=%q", string(b))
 		}
 
 		_ = captureStdout(t, func() {
