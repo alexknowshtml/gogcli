@@ -3,6 +3,7 @@
 ## 0.4.2 - Unreleased
 
 - Gmail: `thread modify` subcommand + `thread get` split (#21) — thanks @alexknowshtml.
+- Auth: refreshed account manager + success UI (#20) — thanks @salmonumbrella.
 
 ## 0.4.1 - 2025-12-28
 
