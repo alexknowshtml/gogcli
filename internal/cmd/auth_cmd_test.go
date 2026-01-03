@@ -13,6 +13,7 @@ import (
 
 	"github.com/99designs/keyring"
 
+	"github.com/steipete/gogcli/internal/config"
 	"github.com/steipete/gogcli/internal/secrets"
 )
 
@@ -201,6 +202,41 @@ func TestAuthStatus_JSON(t *testing.T) {
 	}
 	if payload.Config.Path == "" {
 		t.Fatalf("expected config path")
+	}
+}
+
+func TestAuthStatus_Text_ConfigFile(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "xdg-config"))
+
+	cfgPath, err := config.ConfigPath()
+	if err != nil {
+		t.Fatalf("ConfigPath: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(cfgPath), 0o700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(cfgPath, []byte(`{ keyring_backend: "file" }`), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	out := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{"auth", "status"}); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+		})
+	})
+
+	if !strings.Contains(out, "config_exists\ttrue") {
+		t.Fatalf("expected config_exists true, got: %q", out)
+	}
+	if !strings.Contains(out, "keyring_backend\tfile") {
+		t.Fatalf("expected keyring_backend file, got: %q", out)
+	}
+	if !strings.Contains(out, "keyring_backend_source\tconfig") {
+		t.Fatalf("expected keyring_backend_source config, got: %q", out)
 	}
 }
 
