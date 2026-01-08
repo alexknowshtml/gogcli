@@ -44,6 +44,9 @@ func (c *GmailTrackSetupCmd) Run(ctx context.Context, flags *RootFlags) error {
 
 	key := strings.TrimSpace(c.TrackingKey)
 	if key == "" {
+		key = strings.TrimSpace(cfg.TrackingKey)
+	}
+	if key == "" {
 		key, err = tracking.GenerateKey()
 		if err != nil {
 			return fmt.Errorf("generate tracking key: %w", err)
@@ -52,16 +55,24 @@ func (c *GmailTrackSetupCmd) Run(ctx context.Context, flags *RootFlags) error {
 
 	adminKey := strings.TrimSpace(c.AdminKey)
 	if adminKey == "" {
+		adminKey = strings.TrimSpace(cfg.AdminKey)
+	}
+	if adminKey == "" {
 		adminKey, err = generateAdminKey()
 		if err != nil {
 			return fmt.Errorf("generate admin key: %w", err)
 		}
 	}
 
+	if err := tracking.SaveSecrets(key, adminKey); err != nil {
+		return fmt.Errorf("save tracking secrets: %w", err)
+	}
+
 	cfg.Enabled = true
 	cfg.WorkerURL = c.WorkerURL
-	cfg.TrackingKey = key
-	cfg.AdminKey = adminKey
+	cfg.SecretsInKeyring = true
+	cfg.TrackingKey = ""
+	cfg.AdminKey = ""
 
 	if err := tracking.SaveConfig(cfg); err != nil {
 		return fmt.Errorf("save tracking config: %w", err)
@@ -77,7 +88,9 @@ func (c *GmailTrackSetupCmd) Run(ctx context.Context, flags *RootFlags) error {
 	u.Err().Println("")
 	u.Err().Println("Next steps (manual worker deploy):")
 	u.Err().Println("  - cd internal/tracking/worker")
-	u.Err().Println("  - use the keys from the saved config file when prompted")
+	u.Err().Println("  - use these values when prompted:")
+	u.Err().Printf("    TRACKING_KEY=%s", key)
+	u.Err().Printf("    ADMIN_KEY=%s", adminKey)
 	u.Err().Println("  - wrangler secret put TRACKING_KEY")
 	u.Err().Println("  - wrangler secret put ADMIN_KEY")
 	u.Err().Println("  - wrangler d1 create gog-email-tracker (or choose a name)")
