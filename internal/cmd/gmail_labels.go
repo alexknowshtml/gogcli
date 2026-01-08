@@ -2,14 +2,11 @@ package cmd
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"strings"
 
 	"google.golang.org/api/gmail/v1"
-	"google.golang.org/api/googleapi"
 
 	"github.com/steipete/gogcli/internal/outfmt"
 	"github.com/steipete/gogcli/internal/ui"
@@ -112,71 +109,6 @@ func createLabel(ctx context.Context, svc *gmail.Service, name string) (*gmail.L
 		LabelListVisibility:   "labelShow",
 		MessageListVisibility: "show",
 	}).Context(ctx).Do()
-}
-
-func ensureLabelNameAvailable(svc *gmail.Service, name string) error {
-	idMap, err := fetchLabelNameToID(svc)
-	if err != nil {
-		return err
-	}
-	if _, ok := idMap[strings.ToLower(name)]; ok {
-		return usagef("label already exists: %s", name)
-	}
-	return nil
-}
-
-func mapLabelCreateError(err error, name string) error {
-	if err == nil {
-		return nil
-	}
-	if isDuplicateLabelError(err) {
-		return usagef("label already exists: %s", name)
-	}
-	return err
-}
-
-func isDuplicateLabelError(err error) bool {
-	var gerr *googleapi.Error
-	if errors.As(err, &gerr) {
-		if gerr.Code == http.StatusConflict {
-			if labelAlreadyExistsMessage(gerr.Message) {
-				return true
-			}
-			for _, item := range gerr.Errors {
-				if labelAlreadyExistsMessage(item.Message) || labelDuplicateReason(item.Reason) {
-					return true
-				}
-			}
-		}
-		if labelAlreadyExistsMessage(gerr.Message) {
-			return true
-		}
-		for _, item := range gerr.Errors {
-			if labelAlreadyExistsMessage(item.Message) || labelDuplicateReason(item.Reason) {
-				return true
-			}
-		}
-	}
-	return labelAlreadyExistsMessage(err.Error())
-}
-
-func labelAlreadyExistsMessage(msg string) bool {
-	low := strings.ToLower(msg)
-	if !strings.Contains(low, "label") {
-		return false
-	}
-	return strings.Contains(low, "name exists") ||
-		strings.Contains(low, "already exists") ||
-		strings.Contains(low, "duplicate")
-}
-
-func labelDuplicateReason(reason string) bool {
-	switch strings.ToLower(strings.TrimSpace(reason)) {
-	case "duplicate", "alreadyexists":
-		return true
-	default:
-		return false
-	}
 }
 
 type GmailLabelsListCmd struct{}
