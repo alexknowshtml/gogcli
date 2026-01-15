@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.1 - 2026-01-15
+
+### Added
+
+- Gmail: `--body-file` for `send`, `drafts create`, and `drafts update` (use `-` for stdin) to send multi-line plain text.
+
 ## 0.6.0 - 2026-01-11
 
 ### Added

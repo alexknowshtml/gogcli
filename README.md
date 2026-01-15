@@ -408,6 +408,8 @@ gog gmail thread modify <threadId> --add STARRED --remove INBOX
 
 # Send and compose
 gog gmail send --to a@b.com --subject "Hi" --body "Plain fallback"
+gog gmail send --to a@b.com --subject "Hi" --body-file ./message.txt
+gog gmail send --to a@b.com --subject "Hi" --body-file -   # Read body from stdin
 gog gmail send --to a@b.com --subject "Hi" --body "Plain fallback" --body-html "<p>Hello</p>"
 gog gmail drafts list
 gog gmail drafts create --subject "Draft" --body "Body"

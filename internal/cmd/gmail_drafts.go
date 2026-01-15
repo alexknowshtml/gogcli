@@ -274,6 +274,7 @@ type GmailDraftsCreateCmd struct {
 	Bcc              string   `name:"bcc" help:"BCC recipients (comma-separated)"`
 	Subject          string   `name:"subject" help:"Subject (required)"`
 	Body             string   `name:"body" help:"Body (plain text; required unless --body-html is set)"`
+	BodyFile         string   `name:"body-file" help:"Body file path (plain text; '-' for stdin)"`
 	BodyHTML         string   `name:"body-html" help:"Body (HTML; optional)"`
 	ReplyToMessageID string   `name:"reply-to-message-id" help:"Reply to Gmail message ID (sets In-Reply-To/References and thread)"`
 	ReplyTo          string   `name:"reply-to" help:"Reply-To header address"`
@@ -300,7 +301,7 @@ func (c draftComposeInput) validate() error {
 		return usage("required: --subject")
 	}
 	if strings.TrimSpace(c.Body) == "" && strings.TrimSpace(c.BodyHTML) == "" {
-		return usage("required: --body or --body-html")
+		return usage("required: --body, --body-file, or --body-html")
 	}
 	return nil
 }
@@ -393,12 +394,17 @@ func (c *GmailDraftsCreateCmd) Run(ctx context.Context, flags *RootFlags) error 
 		return err
 	}
 
+	body, err := resolveBodyInput(c.Body, c.BodyFile)
+	if err != nil {
+		return err
+	}
+
 	input := draftComposeInput{
 		To:               c.To,
 		Cc:               c.Cc,
 		Bcc:              c.Bcc,
 		Subject:          c.Subject,
-		Body:             c.Body,
+		Body:             body,
 		BodyHTML:         c.BodyHTML,
 		ReplyToMessageID: c.ReplyToMessageID,
 		ReplyToThreadID:  "",
@@ -434,6 +440,7 @@ type GmailDraftsUpdateCmd struct {
 	Bcc              string   `name:"bcc" help:"BCC recipients (comma-separated)"`
 	Subject          string   `name:"subject" help:"Subject (required)"`
 	Body             string   `name:"body" help:"Body (plain text; required unless --body-html is set)"`
+	BodyFile         string   `name:"body-file" help:"Body file path (plain text; '-' for stdin)"`
 	BodyHTML         string   `name:"body-html" help:"Body (HTML; optional)"`
 	ReplyToMessageID string   `name:"reply-to-message-id" help:"Reply to Gmail message ID (sets In-Reply-To/References and thread)"`
 	ReplyTo          string   `name:"reply-to" help:"Reply-To header address"`
@@ -482,6 +489,11 @@ func (c *GmailDraftsUpdateCmd) Run(ctx context.Context, flags *RootFlags) error 
 		to = existingTo
 	}
 
+	body, err := resolveBodyInput(c.Body, c.BodyFile)
+	if err != nil {
+		return err
+	}
+
 	replyToThreadID := ""
 	if strings.TrimSpace(c.ReplyToMessageID) == "" {
 		replyToThreadID = existingThreadID
@@ -492,7 +504,7 @@ func (c *GmailDraftsUpdateCmd) Run(ctx context.Context, flags *RootFlags) error 
 		Cc:               c.Cc,
 		Bcc:              c.Bcc,
 		Subject:          c.Subject,
-		Body:             c.Body,
+		Body:             body,
 		BodyHTML:         c.BodyHTML,
 		ReplyToMessageID: c.ReplyToMessageID,
 		ReplyToThreadID:  replyToThreadID,

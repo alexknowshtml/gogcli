@@ -22,6 +22,7 @@ type GmailSendCmd struct {
 	Bcc              string   `name:"bcc" help:"BCC recipients (comma-separated)"`
 	Subject          string   `name:"subject" help:"Subject (required)"`
 	Body             string   `name:"body" help:"Body (plain text; required unless --body-html is set)"`
+	BodyFile         string   `name:"body-file" help:"Body file path (plain text; '-' for stdin)"`
 	BodyHTML         string   `name:"body-html" help:"Body (HTML; optional)"`
 	ReplyToMessageID string   `name:"reply-to-message-id" aliases:"in-reply-to" help:"Reply to Gmail message ID (sets In-Reply-To/References and thread)"`
 	ThreadID         string   `name:"thread-id" help:"Reply within a Gmail thread (uses latest message for headers)"`
@@ -69,6 +70,11 @@ func (c *GmailSendCmd) Run(ctx context.Context, flags *RootFlags) error {
 	replyToMessageID := strings.TrimSpace(c.ReplyToMessageID)
 	threadID := strings.TrimSpace(c.ThreadID)
 
+	body, err := resolveBodyInput(c.Body, c.BodyFile)
+	if err != nil {
+		return err
+	}
+
 	if replyToMessageID != "" && threadID != "" {
 		return usage("use only one of --reply-to-message-id or --thread-id")
 	}
@@ -85,8 +91,8 @@ func (c *GmailSendCmd) Run(ctx context.Context, flags *RootFlags) error {
 	if strings.TrimSpace(c.Subject) == "" {
 		return usage("required: --subject")
 	}
-	if strings.TrimSpace(c.Body) == "" && strings.TrimSpace(c.BodyHTML) == "" {
-		return usage("required: --body or --body-html")
+	if strings.TrimSpace(body) == "" && strings.TrimSpace(c.BodyHTML) == "" {
+		return usage("required: --body, --body-file, or --body-html")
 	}
 	if c.TrackSplit && !c.Track {
 		return usage("--track-split requires --track")
@@ -168,7 +174,7 @@ func (c *GmailSendCmd) Run(ctx context.Context, flags *RootFlags) error {
 		FromAddr:    fromAddr,
 		ReplyTo:     c.ReplyTo,
 		Subject:     c.Subject,
-		Body:        c.Body,
+		Body:        body,
 		BodyHTML:    c.BodyHTML,
 		ReplyInfo:   replyInfo,
 		Attachments: atts,
