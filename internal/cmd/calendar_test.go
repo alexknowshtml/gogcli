@@ -341,6 +341,9 @@ func TestBuildReminders(t *testing.T) {
 	if got == nil || got.UseDefault || len(got.Overrides) != 2 {
 		t.Fatalf("unexpected: %#v", got)
 	}
+	if !hasStringValue(got.ForceSendFields, "UseDefault") {
+		t.Fatalf("expected UseDefault to be force-sent, got %#v", got.ForceSendFields)
+	}
 	if got.Overrides[0].Method != "popup" || got.Overrides[0].Minutes != 30 {
 		t.Fatalf("unexpected override[0]: %#v", got.Overrides[0])
 	}
@@ -357,4 +360,13 @@ func TestBuildReminders(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error for invalid reminder")
 	}
+}
+
+func hasStringValue(values []string, value string) bool {
+	for _, v := range values {
+		if v == value {
+			return true
+		}
+	}
+	return false
 }
