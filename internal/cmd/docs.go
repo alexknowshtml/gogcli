@@ -29,6 +29,9 @@ func newDocsCmd(flags *rootFlags) *cobra.Command {
 	cmd.AddCommand(newDocsCopyCmd(flags))
 	cmd.AddCommand(newDocsCatCmd(flags))
 	cmd.AddCommand(newDocsWriteCmd(flags))
+	cmd.AddCommand(newDocsInsertCmd(flags))
+	cmd.AddCommand(newDocsDeleteCmd(flags))
+	cmd.AddCommand(newDocsFindReplaceCmd(flags))
 	return cmd
 }
 
@@ -360,5 +363,261 @@ Use --markdown to convert markdown to Google Docs formatting (requires --replace
 	cmd.Flags().StringVarP(&contentFile, "file", "f", "", "Read content from file")
 	cmd.Flags().BoolVar(&replace, "replace", false, "Replace all content (default: append)")
 	cmd.Flags().BoolVar(&markdown, "markdown", false, "Convert markdown to Google Docs formatting (requires --replace)")
+	return cmd
+}
+
+func newDocsInsertCmd(flags *rootFlags) *cobra.Command {
+	var index int64
+	var contentFile string
+
+	cmd := &cobra.Command{
+		Use:   "insert <docId> [text]",
+		Short: "Insert text at a specific position",
+		Long: `Insert text at a specific character index in a Google Doc.
+
+Use 'gog docs cat <docId>' to see the document content and determine indices.
+Index 1 is the beginning of the document (index 0 is reserved).
+
+Examples:
+  gog docs insert <docId> --index 1 "Text at beginning"
+  gog docs insert <docId> --index 50 "Text at position 50"
+  gog docs insert <docId> --index 1 --file header.txt`,
+		Args: cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			u := ui.FromContext(cmd.Context())
+			account, err := requireAccount(flags)
+			if err != nil {
+				return err
+			}
+
+			docID := strings.TrimSpace(args[0])
+			if docID == "" {
+				return usage("empty docId")
+			}
+
+			// Get content from args, file, or stdin
+			var content string
+			if len(args) > 1 {
+				content = strings.Join(args[1:], " ")
+			} else if contentFile != "" {
+				data, err := os.ReadFile(contentFile)
+				if err != nil {
+					return fmt.Errorf("reading file: %w", err)
+				}
+				content = string(data)
+			} else {
+				stat, _ := os.Stdin.Stat()
+				if (stat.Mode() & os.ModeCharDevice) == 0 {
+					data, err := io.ReadAll(os.Stdin)
+					if err != nil {
+						return fmt.Errorf("reading stdin: %w", err)
+					}
+					content = string(data)
+				}
+			}
+
+			if content == "" {
+				return usage("no content provided (use argument, --file, or stdin)")
+			}
+
+			if index < 1 {
+				return usage("--index must be >= 1 (index 0 is reserved)")
+			}
+
+			svc, err := newDocsService(cmd.Context(), account)
+			if err != nil {
+				return err
+			}
+
+			result, err := svc.Documents.BatchUpdate(docID, &docs.BatchUpdateDocumentRequest{
+				Requests: []*docs.Request{{
+					InsertText: &docs.InsertTextRequest{
+						Text: content,
+						Location: &docs.Location{
+							Index: index,
+						},
+					},
+				}},
+			}).Context(cmd.Context()).Do()
+			if err != nil {
+				return fmt.Errorf("inserting text: %w", err)
+			}
+
+			if outfmt.IsJSON(cmd.Context()) {
+				return outfmt.WriteJSON(os.Stdout, map[string]any{
+					"documentId": result.DocumentId,
+					"inserted":   len(content),
+					"atIndex":    index,
+				})
+			}
+
+			u.Out().Printf("documentId\t%s", result.DocumentId)
+			u.Out().Printf("inserted\t%d bytes", len(content))
+			u.Out().Printf("atIndex\t%d", index)
+			return nil
+		},
+	}
+
+	cmd.Flags().Int64Var(&index, "index", 1, "Character index to insert at (1 = beginning)")
+	cmd.Flags().StringVarP(&contentFile, "file", "f", "", "Read content from file")
+	return cmd
+}
+
+func newDocsDeleteCmd(flags *rootFlags) *cobra.Command {
+	var startIndex int64
+	var endIndex int64
+
+	cmd := &cobra.Command{
+		Use:   "delete <docId>",
+		Short: "Delete text range from document",
+		Long: `Delete a range of text from a Google Doc.
+
+Use 'gog docs cat <docId>' to see the document content and determine indices.
+Index 1 is the beginning of the document (index 0 is reserved).
+
+Examples:
+  gog docs delete <docId> --start 10 --end 50
+  gog docs delete <docId> --start 1 --end 100  # Delete first 99 characters`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			u := ui.FromContext(cmd.Context())
+			account, err := requireAccount(flags)
+			if err != nil {
+				return err
+			}
+
+			docID := strings.TrimSpace(args[0])
+			if docID == "" {
+				return usage("empty docId")
+			}
+
+			if startIndex < 1 {
+				return usage("--start must be >= 1")
+			}
+			if endIndex <= startIndex {
+				return usage("--end must be greater than --start")
+			}
+
+			svc, err := newDocsService(cmd.Context(), account)
+			if err != nil {
+				return err
+			}
+
+			result, err := svc.Documents.BatchUpdate(docID, &docs.BatchUpdateDocumentRequest{
+				Requests: []*docs.Request{{
+					DeleteContentRange: &docs.DeleteContentRangeRequest{
+						Range: &docs.Range{
+							StartIndex: startIndex,
+							EndIndex:   endIndex,
+						},
+					},
+				}},
+			}).Context(cmd.Context()).Do()
+			if err != nil {
+				return fmt.Errorf("deleting content: %w", err)
+			}
+
+			if outfmt.IsJSON(cmd.Context()) {
+				return outfmt.WriteJSON(os.Stdout, map[string]any{
+					"documentId": result.DocumentId,
+					"deleted":    endIndex - startIndex,
+					"startIndex": startIndex,
+					"endIndex":   endIndex,
+				})
+			}
+
+			u.Out().Printf("documentId\t%s", result.DocumentId)
+			u.Out().Printf("deleted\t%d characters", endIndex-startIndex)
+			u.Out().Printf("range\t%d-%d", startIndex, endIndex)
+			return nil
+		},
+	}
+
+	cmd.Flags().Int64Var(&startIndex, "start", 0, "Start index (required, >= 1)")
+	cmd.Flags().Int64Var(&endIndex, "end", 0, "End index (required, > start)")
+	cmd.MarkFlagRequired("start")
+	cmd.MarkFlagRequired("end")
+	return cmd
+}
+
+func newDocsFindReplaceCmd(flags *rootFlags) *cobra.Command {
+	var matchCase bool
+	var replaceAll bool
+
+	cmd := &cobra.Command{
+		Use:   "find-replace <docId> <find> <replace>",
+		Short: "Find and replace text in document",
+		Long: `Search for text and replace it in a Google Doc.
+
+By default, replaces all occurrences. Use --first to replace only the first match.
+
+Examples:
+  gog docs find-replace <docId> "old text" "new text"
+  gog docs find-replace <docId> "TODO" "DONE" --match-case
+  gog docs find-replace <docId> "typo" "fixed" --first`,
+		Args: cobra.ExactArgs(3),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			u := ui.FromContext(cmd.Context())
+			account, err := requireAccount(flags)
+			if err != nil {
+				return err
+			}
+
+			docID := strings.TrimSpace(args[0])
+			findText := args[1]
+			replaceText := args[2]
+
+			if docID == "" {
+				return usage("empty docId")
+			}
+			if findText == "" {
+				return usage("find text cannot be empty")
+			}
+
+			svc, err := newDocsService(cmd.Context(), account)
+			if err != nil {
+				return err
+			}
+
+			result, err := svc.Documents.BatchUpdate(docID, &docs.BatchUpdateDocumentRequest{
+				Requests: []*docs.Request{{
+					ReplaceAllText: &docs.ReplaceAllTextRequest{
+						ContainsText: &docs.SubstringMatchCriteria{
+							Text:      findText,
+							MatchCase: matchCase,
+						},
+						ReplaceText: replaceText,
+					},
+				}},
+			}).Context(cmd.Context()).Do()
+			if err != nil {
+				return fmt.Errorf("find-replace: %w", err)
+			}
+
+			// Get the number of replacements from the reply
+			replacements := int64(0)
+			if len(result.Replies) > 0 && result.Replies[0].ReplaceAllText != nil {
+				replacements = result.Replies[0].ReplaceAllText.OccurrencesChanged
+			}
+
+			if outfmt.IsJSON(cmd.Context()) {
+				return outfmt.WriteJSON(os.Stdout, map[string]any{
+					"documentId":   result.DocumentId,
+					"find":         findText,
+					"replace":      replaceText,
+					"replacements": replacements,
+				})
+			}
+
+			u.Out().Printf("documentId\t%s", result.DocumentId)
+			u.Out().Printf("find\t%s", findText)
+			u.Out().Printf("replace\t%s", replaceText)
+			u.Out().Printf("replacements\t%d", replacements)
+			return nil
+		},
+	}
+
+	cmd.Flags().BoolVar(&matchCase, "match-case", false, "Case-sensitive matching")
+	cmd.Flags().BoolVar(&replaceAll, "first", false, "Replace only first occurrence (not yet supported by API)")
 	return cmd
 }
