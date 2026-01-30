@@ -13,6 +13,7 @@ import (
 	"github.com/steipete/gogcli/internal/ui"
 	"google.golang.org/api/docs/v1"
 	"google.golang.org/api/drive/v3"
+	gapi "google.golang.org/api/googleapi"
 )
 
 var newDocsService = googleapi.NewDocs
@@ -197,6 +198,7 @@ func newDocsCatCmd(flags *rootFlags) *cobra.Command {
 func newDocsWriteCmd(flags *rootFlags) *cobra.Command {
 	var contentFile string
 	var replace bool
+	var markdown bool
 
 	cmd := &cobra.Command{
 		Use:   "write <docId> [content]",
@@ -209,7 +211,8 @@ Content can be provided via:
   - Stdin: echo "content" | gog docs write <docId>
 
 By default, content is appended to the end of the document.
-Use --replace to clear the document first.`,
+Use --replace to clear the document first.
+Use --markdown to convert markdown to Google Docs formatting (requires --replace).`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			u := ui.FromContext(cmd.Context())
@@ -249,6 +252,47 @@ Use --replace to clear the document first.`,
 				return usage("no content provided (use argument, --file, or stdin)")
 			}
 
+			// Markdown mode uses Drive API to convert markdown to Google Docs format
+			if markdown {
+				if !replace {
+					return usage("--markdown requires --replace (cannot append formatted markdown)")
+				}
+
+				driveSvc, err := newDriveService(cmd.Context(), account)
+				if err != nil {
+					return err
+				}
+
+				// Update the file content with markdown mime type - Drive will convert it
+				updated, err := driveSvc.Files.Update(docID, &drive.File{}).
+					Media(strings.NewReader(content), gapi.ContentType("text/markdown")).
+					SupportsAllDrives(true).
+					Fields("id, name, webViewLink").
+					Context(cmd.Context()).
+					Do()
+				if err != nil {
+					return fmt.Errorf("writing markdown to document: %w", err)
+				}
+
+				if outfmt.IsJSON(cmd.Context()) {
+					return outfmt.WriteJSON(os.Stdout, map[string]any{
+						"documentId": updated.Id,
+						"written":    len(content),
+						"replaced":   true,
+						"markdown":   true,
+					})
+				}
+
+				u.Out().Printf("documentId\t%s", updated.Id)
+				u.Out().Printf("written\t%d bytes", len(content))
+				u.Out().Printf("mode\treplaced (markdown converted)")
+				if updated.WebViewLink != "" {
+					u.Out().Printf("link\t%s", updated.WebViewLink)
+				}
+				return nil
+			}
+
+			// Plain text mode uses Docs API
 			svc, err := newDocsService(cmd.Context(), account)
 			if err != nil {
 				return err
@@ -315,5 +359,6 @@ Use --replace to clear the document first.`,
 
 	cmd.Flags().StringVarP(&contentFile, "file", "f", "", "Read content from file")
 	cmd.Flags().BoolVar(&replace, "replace", false, "Replace all content (default: append)")
+	cmd.Flags().BoolVar(&markdown, "markdown", false, "Convert markdown to Google Docs formatting (requires --replace)")
 	return cmd
 }
