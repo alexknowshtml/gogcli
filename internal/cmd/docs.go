@@ -8,21 +8,26 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/steipete/gogcli/internal/googleapi"
 	"github.com/steipete/gogcli/internal/outfmt"
 	"github.com/steipete/gogcli/internal/ui"
+	"google.golang.org/api/docs/v1"
 	"google.golang.org/api/drive/v3"
 )
+
+var newDocsService = googleapi.NewDocs
 
 func newDocsCmd(flags *rootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "docs",
-		Short: "Google Docs (export via Drive)",
+		Short: "Google Docs commands",
 	}
 	cmd.AddCommand(newDocsExportCmd(flags))
 	cmd.AddCommand(newDocsInfoCmd(flags))
 	cmd.AddCommand(newDocsCreateCmd(flags))
 	cmd.AddCommand(newDocsCopyCmd(flags))
 	cmd.AddCommand(newDocsCatCmd(flags))
+	cmd.AddCommand(newDocsWriteCmd(flags))
 	return cmd
 }
 
@@ -186,5 +191,129 @@ func newDocsCatCmd(flags *rootFlags) *cobra.Command {
 	}
 
 	cmd.Flags().Int64Var(&maxBytes, "max-bytes", 2_000_000, "Max bytes to read (0 = unlimited)")
+	return cmd
+}
+
+func newDocsWriteCmd(flags *rootFlags) *cobra.Command {
+	var contentFile string
+	var replace bool
+
+	cmd := &cobra.Command{
+		Use:   "write <docId> [content]",
+		Short: "Write content to a Google Doc",
+		Long: `Write or append content to a Google Doc.
+
+Content can be provided via:
+  - Argument: gog docs write <docId> "Your content here"
+  - File: gog docs write <docId> --file content.md
+  - Stdin: echo "content" | gog docs write <docId>
+
+By default, content is appended to the end of the document.
+Use --replace to clear the document first.`,
+		Args: cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			u := ui.FromContext(cmd.Context())
+			account, err := requireAccount(flags)
+			if err != nil {
+				return err
+			}
+
+			docID := strings.TrimSpace(args[0])
+			if docID == "" {
+				return usage("empty docId")
+			}
+
+			// Get content from args, file, or stdin
+			var content string
+			if len(args) > 1 {
+				content = strings.Join(args[1:], " ")
+			} else if contentFile != "" {
+				data, err := os.ReadFile(contentFile)
+				if err != nil {
+					return fmt.Errorf("reading file: %w", err)
+				}
+				content = string(data)
+			} else {
+				// Check if stdin has data
+				stat, _ := os.Stdin.Stat()
+				if (stat.Mode() & os.ModeCharDevice) == 0 {
+					data, err := io.ReadAll(os.Stdin)
+					if err != nil {
+						return fmt.Errorf("reading stdin: %w", err)
+					}
+					content = string(data)
+				}
+			}
+
+			if content == "" {
+				return usage("no content provided (use argument, --file, or stdin)")
+			}
+
+			svc, err := newDocsService(cmd.Context(), account)
+			if err != nil {
+				return err
+			}
+
+			var requests []*docs.Request
+
+			if replace {
+				// First, get the document to find content length
+				doc, err := svc.Documents.Get(docID).Context(cmd.Context()).Do()
+				if err != nil {
+					return fmt.Errorf("getting document: %w", err)
+				}
+
+				// Calculate end index (content length minus 1 for the trailing newline)
+				endIndex := doc.Body.Content[len(doc.Body.Content)-1].EndIndex - 1
+
+				// Only delete if there's content to delete
+				if endIndex > 1 {
+					requests = append(requests, &docs.Request{
+						DeleteContentRange: &docs.DeleteContentRangeRequest{
+							Range: &docs.Range{
+								StartIndex: 1,
+								EndIndex:   endIndex,
+							},
+						},
+					})
+				}
+			}
+
+			// Insert text at end of document
+			requests = append(requests, &docs.Request{
+				InsertText: &docs.InsertTextRequest{
+					Text:                  content,
+					EndOfSegmentLocation: &docs.EndOfSegmentLocation{},
+				},
+			})
+
+			result, err := svc.Documents.BatchUpdate(docID, &docs.BatchUpdateDocumentRequest{
+				Requests: requests,
+			}).Context(cmd.Context()).Do()
+			if err != nil {
+				return fmt.Errorf("writing to document: %w", err)
+			}
+
+			if outfmt.IsJSON(cmd.Context()) {
+				return outfmt.WriteJSON(os.Stdout, map[string]any{
+					"documentId": result.DocumentId,
+					"written":    len(content),
+					"replaced":   replace,
+				})
+			}
+
+			u.Out().Printf("documentId\t%s", result.DocumentId)
+			u.Out().Printf("written\t%d bytes", len(content))
+			if replace {
+				u.Out().Printf("mode\treplaced")
+			} else {
+				u.Out().Printf("mode\tappended")
+			}
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVarP(&contentFile, "file", "f", "", "Read content from file")
+	cmd.Flags().BoolVar(&replace, "replace", false, "Replace all content (default: append)")
 	return cmd
 }
