@@ -35,6 +35,7 @@ func newSheetsCmd(flags *rootFlags) *cobra.Command {
 	cmd.AddCommand(newSheetsCreateCmd(flags))
 	cmd.AddCommand(newSheetsCopyCmd(flags))
 	cmd.AddCommand(newSheetsExportCmd(flags))
+	cmd.AddCommand(newSheetsImportCmd(flags))
 	return cmd
 }
 
