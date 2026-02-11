@@ -22,13 +22,17 @@ import (
 var newDocsService = googleapi.NewDocs
 
 type DocsCmd struct {
-	Export   DocsExportCmd   `cmd:"" name:"export" help:"Export a Google Doc (pdf|docx|txt)"`
-	Info     DocsInfoCmd     `cmd:"" name:"info" help:"Get Google Doc metadata"`
-	Create   DocsCreateCmd   `cmd:"" name:"create" help:"Create a Google Doc"`
-	Copy     DocsCopyCmd     `cmd:"" name:"copy" help:"Copy a Google Doc"`
-	Cat      DocsCatCmd      `cmd:"" name:"cat" help:"Print a Google Doc as plain text"`
-	ListTabs DocsListTabsCmd `cmd:"" name:"list-tabs" help:"List all tabs in a Google Doc"`
-	Update   DocsUpdateCmd   `cmd:"" name:"update" help:"Update content in a Google Doc"`
+	Export      DocsExportCmd      `cmd:"" name:"export" help:"Export a Google Doc (pdf|docx|txt)"`
+	Info        DocsInfoCmd        `cmd:"" name:"info" help:"Get Google Doc metadata"`
+	Create      DocsCreateCmd      `cmd:"" name:"create" help:"Create a Google Doc"`
+	Copy        DocsCopyCmd        `cmd:"" name:"copy" help:"Copy a Google Doc"`
+	Cat         DocsCatCmd         `cmd:"" name:"cat" help:"Print a Google Doc as plain text"`
+	ListTabs    DocsListTabsCmd    `cmd:"" name:"list-tabs" help:"List all tabs in a Google Doc"`
+	Write       DocsWriteCmd       `cmd:"" name:"write" help:"Write content to a Google Doc"`
+	Insert      DocsInsertCmd      `cmd:"" name:"insert" help:"Insert text at a specific position"`
+	Delete      DocsDeleteCmd      `cmd:"" name:"delete" help:"Delete text range from document"`
+	FindReplace DocsFindReplaceCmd `cmd:"" name:"find-replace" help:"Find and replace text in document"`
+	Update      DocsUpdateCmd      `cmd:"" name:"update" help:"Update content in a Google Doc"`
 }
 type DocsExportCmd struct {
 	DocID  string         `arg:"" name:"docId" help:"Doc ID"`
@@ -286,60 +290,7 @@ func (c *DocsCatCmd) Run(ctx context.Context, flags *RootFlags) error {
 
 	// Use tabs API when --tab or --all-tabs is specified.
 	if c.Tab != "" || c.AllTabs {
-		doc, err := svc.Documents.Get(id).
-			IncludeTabsContent(true).
-			Context(ctx).
-			Do()
-		if err != nil {
-			if isDocsNotFound(err) {
-				return fmt.Errorf("doc not found or not a Google Doc (id=%s)", id)
-			}
-			return err
-		}
-		if doc == nil {
-			return errors.New("doc not found")
-		}
-
-		tabs := flattenTabs(doc.Tabs)
-
-		if c.Tab != "" {
-			tab := findTab(tabs, c.Tab)
-			if tab == nil {
-				return fmt.Errorf("tab not found: %s", c.Tab)
-			}
-			text := tabPlainText(tab, c.MaxBytes)
-			if outfmt.IsJSON(ctx) {
-				return outfmt.WriteJSON(os.Stdout, map[string]any{
-					"tab": tabJSON(tab, text),
-				})
-			}
-			_, err = io.WriteString(os.Stdout, text)
-			return err
-		}
-
-		// --all-tabs
-		if outfmt.IsJSON(ctx) {
-			var out []map[string]any
-			for _, tab := range tabs {
-				text := tabPlainText(tab, c.MaxBytes)
-				out = append(out, tabJSON(tab, text))
-			}
-			return outfmt.WriteJSON(os.Stdout, map[string]any{"tabs": out})
-		}
-
-		for i, tab := range tabs {
-			title := tabTitle(tab)
-			if i > 0 {
-				fmt.Fprintln(os.Stdout)
-			}
-			fmt.Fprintf(os.Stdout, "=== Tab: %s ===\n", title)
-			text := tabPlainText(tab, c.MaxBytes)
-			_, _ = io.WriteString(os.Stdout, text)
-			if text != "" && !strings.HasSuffix(text, "\n") {
-				fmt.Fprintln(os.Stdout)
-			}
-		}
-		return nil
+		return c.runWithTabs(ctx, svc, id)
 	}
 
 	// Default: original behavior (no tabs API).
@@ -539,6 +490,63 @@ func (c *DocsUpdateCmd) Run(ctx context.Context, flags *RootFlags) error {
 	return nil
 }
 
+func (c *DocsCatCmd) runWithTabs(ctx context.Context, svc *docs.Service, id string) error {
+	doc, err := svc.Documents.Get(id).
+		IncludeTabsContent(true).
+		Context(ctx).
+		Do()
+	if err != nil {
+		if isDocsNotFound(err) {
+			return fmt.Errorf("doc not found or not a Google Doc (id=%s)", id)
+		}
+		return err
+	}
+	if doc == nil {
+		return errors.New("doc not found")
+	}
+
+	tabs := flattenTabs(doc.Tabs)
+
+	if c.Tab != "" {
+		tab := findTab(tabs, c.Tab)
+		if tab == nil {
+			return fmt.Errorf("tab not found: %s", c.Tab)
+		}
+		text := tabPlainText(tab, c.MaxBytes)
+		if outfmt.IsJSON(ctx) {
+			return outfmt.WriteJSON(os.Stdout, map[string]any{
+				"tab": tabJSON(tab, text),
+			})
+		}
+		_, err = io.WriteString(os.Stdout, text)
+		return err
+	}
+
+	// --all-tabs
+	if outfmt.IsJSON(ctx) {
+		var out []map[string]any
+		for _, tab := range tabs {
+			text := tabPlainText(tab, c.MaxBytes)
+			out = append(out, tabJSON(tab, text))
+		}
+		return outfmt.WriteJSON(os.Stdout, map[string]any{"tabs": out})
+	}
+
+	for i, tab := range tabs {
+		title := tabTitle(tab)
+		if i > 0 {
+			fmt.Fprintln(os.Stdout)
+		}
+		fmt.Fprintf(os.Stdout, "=== Tab: %s ===\n", title)
+		text := tabPlainText(tab, c.MaxBytes)
+		_, _ = io.WriteString(os.Stdout, text)
+		if text != "" && !strings.HasSuffix(text, "\n") {
+			fmt.Fprintln(os.Stdout)
+		}
+	}
+	return nil
+}
+
 type DocsListTabsCmd struct {
 	DocID string `arg:"" name:"docId" help:"Doc ID"`
 }
@@ -595,6 +603,359 @@ func (c *DocsListTabsCmd) Run(ctx context.Context, flags *RootFlags) error {
 		}
 	}
 	return nil
+}
+
+// --- Write / Insert / Delete / Find-Replace commands ---
+
+type DocsWriteCmd struct {
+	DocID    string `arg:"" name:"docId" help:"Doc ID"`
+	Content  string `arg:"" optional:"" name:"content" help:"Content to write (or use --file / stdin)"`
+	File     string `name:"file" short:"f" help:"Read content from file (use - for stdin)"`
+	Replace  bool   `name:"replace" help:"Replace all content (default: append)"`
+	Markdown bool   `name:"markdown" help:"Convert markdown to Google Docs formatting (requires --replace)"`
+}
+
+func (c *DocsWriteCmd) Run(ctx context.Context, flags *RootFlags) error {
+	account, err := requireAccount(flags)
+	if err != nil {
+		return err
+	}
+
+	docID := strings.TrimSpace(c.DocID)
+	if docID == "" {
+		return usage("empty docId")
+	}
+
+	content, err := resolveContentInput(c.Content, c.File)
+	if err != nil {
+		return err
+	}
+	if content == "" {
+		return usage("no content provided (use argument, --file, or stdin)")
+	}
+
+	if c.Markdown {
+		return c.writeMarkdown(ctx, account, docID, content)
+	}
+	return c.writePlainText(ctx, account, docID, content)
+}
+
+func (c *DocsWriteCmd) writeMarkdown(ctx context.Context, account, docID, content string) error {
+	u := ui.FromContext(ctx)
+
+	if !c.Replace {
+		return usage("--markdown requires --replace (cannot append formatted markdown)")
+	}
+
+	driveSvc, err := newDriveService(ctx, account)
+	if err != nil {
+		return err
+	}
+
+	updated, err := driveSvc.Files.Update(docID, &drive.File{}).
+		Media(strings.NewReader(content), gapi.ContentType("text/markdown")).
+		SupportsAllDrives(true).
+		Fields("id, name, webViewLink").
+		Context(ctx).
+		Do()
+	if err != nil {
+		return fmt.Errorf("writing markdown to document: %w", err)
+	}
+
+	if outfmt.IsJSON(ctx) {
+		return outfmt.WriteJSON(os.Stdout, map[string]any{
+			"documentId": updated.Id,
+			"written":    len(content),
+			"replaced":   true,
+			"markdown":   true,
+		})
+	}
+
+	u.Out().Printf("documentId\t%s", updated.Id)
+	u.Out().Printf("written\t%d bytes", len(content))
+	u.Out().Printf("mode\treplaced (markdown converted)")
+	if updated.WebViewLink != "" {
+		u.Out().Printf("link\t%s", updated.WebViewLink)
+	}
+	return nil
+}
+
+func (c *DocsWriteCmd) writePlainText(ctx context.Context, account, docID, content string) error {
+	u := ui.FromContext(ctx)
+
+	svc, err := newDocsService(ctx, account)
+	if err != nil {
+		return err
+	}
+
+	var requests []*docs.Request
+
+	if c.Replace {
+		var doc *docs.Document
+		doc, err = svc.Documents.Get(docID).Context(ctx).Do()
+		if err != nil {
+			return fmt.Errorf("getting document: %w", err)
+		}
+		endIndex := doc.Body.Content[len(doc.Body.Content)-1].EndIndex - 1
+		if endIndex > 1 {
+			requests = append(requests, &docs.Request{
+				DeleteContentRange: &docs.DeleteContentRangeRequest{
+					Range: &docs.Range{
+						StartIndex: 1,
+						EndIndex:   endIndex,
+					},
+				},
+			})
+		}
+	}
+
+	requests = append(requests, &docs.Request{
+		InsertText: &docs.InsertTextRequest{
+			Text:                 content,
+			EndOfSegmentLocation: &docs.EndOfSegmentLocation{},
+		},
+	})
+
+	result, err := svc.Documents.BatchUpdate(docID, &docs.BatchUpdateDocumentRequest{
+		Requests: requests,
+	}).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("writing to document: %w", err)
+	}
+
+	if outfmt.IsJSON(ctx) {
+		return outfmt.WriteJSON(os.Stdout, map[string]any{
+			"documentId": result.DocumentId,
+			"written":    len(content),
+			"replaced":   c.Replace,
+		})
+	}
+
+	u.Out().Printf("documentId\t%s", result.DocumentId)
+	u.Out().Printf("written\t%d bytes", len(content))
+	if c.Replace {
+		u.Out().Printf("mode\treplaced")
+	} else {
+		u.Out().Printf("mode\tappended")
+	}
+	return nil
+}
+
+type DocsInsertCmd struct {
+	DocID   string `arg:"" name:"docId" help:"Doc ID"`
+	Content string `arg:"" optional:"" name:"content" help:"Text to insert (or use --file / stdin)"`
+	Index   int64  `name:"index" help:"Character index to insert at (1 = beginning)" default:"1"`
+	File    string `name:"file" short:"f" help:"Read content from file (use - for stdin)"`
+}
+
+func (c *DocsInsertCmd) Run(ctx context.Context, flags *RootFlags) error {
+	u := ui.FromContext(ctx)
+	account, err := requireAccount(flags)
+	if err != nil {
+		return err
+	}
+
+	docID := strings.TrimSpace(c.DocID)
+	if docID == "" {
+		return usage("empty docId")
+	}
+
+	content, err := resolveContentInput(c.Content, c.File)
+	if err != nil {
+		return err
+	}
+	if content == "" {
+		return usage("no content provided (use argument, --file, or stdin)")
+	}
+
+	if c.Index < 1 {
+		return usage("--index must be >= 1 (index 0 is reserved)")
+	}
+
+	svc, err := newDocsService(ctx, account)
+	if err != nil {
+		return err
+	}
+
+	result, err := svc.Documents.BatchUpdate(docID, &docs.BatchUpdateDocumentRequest{
+		Requests: []*docs.Request{{
+			InsertText: &docs.InsertTextRequest{
+				Text: content,
+				Location: &docs.Location{
+					Index: c.Index,
+				},
+			},
+		}},
+	}).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("inserting text: %w", err)
+	}
+
+	if outfmt.IsJSON(ctx) {
+		return outfmt.WriteJSON(os.Stdout, map[string]any{
+			"documentId": result.DocumentId,
+			"inserted":   len(content),
+			"atIndex":    c.Index,
+		})
+	}
+
+	u.Out().Printf("documentId\t%s", result.DocumentId)
+	u.Out().Printf("inserted\t%d bytes", len(content))
+	u.Out().Printf("atIndex\t%d", c.Index)
+	return nil
+}
+
+type DocsDeleteCmd struct {
+	DocID string `arg:"" name:"docId" help:"Doc ID"`
+	Start int64  `name:"start" required:"" help:"Start index (>= 1)"`
+	End   int64  `name:"end" required:"" help:"End index (> start)"`
+}
+
+func (c *DocsDeleteCmd) Run(ctx context.Context, flags *RootFlags) error {
+	u := ui.FromContext(ctx)
+	account, err := requireAccount(flags)
+	if err != nil {
+		return err
+	}
+
+	docID := strings.TrimSpace(c.DocID)
+	if docID == "" {
+		return usage("empty docId")
+	}
+
+	if c.Start < 1 {
+		return usage("--start must be >= 1")
+	}
+	if c.End <= c.Start {
+		return usage("--end must be greater than --start")
+	}
+
+	svc, err := newDocsService(ctx, account)
+	if err != nil {
+		return err
+	}
+
+	result, err := svc.Documents.BatchUpdate(docID, &docs.BatchUpdateDocumentRequest{
+		Requests: []*docs.Request{{
+			DeleteContentRange: &docs.DeleteContentRangeRequest{
+				Range: &docs.Range{
+					StartIndex: c.Start,
+					EndIndex:   c.End,
+				},
+			},
+		}},
+	}).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("deleting content: %w", err)
+	}
+
+	if outfmt.IsJSON(ctx) {
+		return outfmt.WriteJSON(os.Stdout, map[string]any{
+			"documentId": result.DocumentId,
+			"deleted":    c.End - c.Start,
+			"startIndex": c.Start,
+			"endIndex":   c.End,
+		})
+	}
+
+	u.Out().Printf("documentId\t%s", result.DocumentId)
+	u.Out().Printf("deleted\t%d characters", c.End-c.Start)
+	u.Out().Printf("range\t%d-%d", c.Start, c.End)
+	return nil
+}
+
+type DocsFindReplaceCmd struct {
+	DocID       string `arg:"" name:"docId" help:"Doc ID"`
+	Find        string `arg:"" name:"find" help:"Text to find"`
+	ReplaceText string `arg:"" name:"replace" help:"Replacement text"`
+	MatchCase   bool   `name:"match-case" help:"Case-sensitive matching"`
+}
+
+func (c *DocsFindReplaceCmd) Run(ctx context.Context, flags *RootFlags) error {
+	u := ui.FromContext(ctx)
+	account, err := requireAccount(flags)
+	if err != nil {
+		return err
+	}
+
+	docID := strings.TrimSpace(c.DocID)
+	if docID == "" {
+		return usage("empty docId")
+	}
+	if c.Find == "" {
+		return usage("find text cannot be empty")
+	}
+
+	svc, err := newDocsService(ctx, account)
+	if err != nil {
+		return err
+	}
+
+	result, err := svc.Documents.BatchUpdate(docID, &docs.BatchUpdateDocumentRequest{
+		Requests: []*docs.Request{{
+			ReplaceAllText: &docs.ReplaceAllTextRequest{
+				ContainsText: &docs.SubstringMatchCriteria{
+					Text:      c.Find,
+					MatchCase: c.MatchCase,
+				},
+				ReplaceText: c.ReplaceText,
+			},
+		}},
+	}).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("find-replace: %w", err)
+	}
+
+	replacements := int64(0)
+	if len(result.Replies) > 0 && result.Replies[0].ReplaceAllText != nil {
+		replacements = result.Replies[0].ReplaceAllText.OccurrencesChanged
+	}
+
+	if outfmt.IsJSON(ctx) {
+		return outfmt.WriteJSON(os.Stdout, map[string]any{
+			"documentId":   result.DocumentId,
+			"find":         c.Find,
+			"replace":      c.ReplaceText,
+			"replacements": replacements,
+		})
+	}
+
+	u.Out().Printf("documentId\t%s", result.DocumentId)
+	u.Out().Printf("find\t%s", c.Find)
+	u.Out().Printf("replace\t%s", c.ReplaceText)
+	u.Out().Printf("replacements\t%d", replacements)
+	return nil
+}
+
+// resolveContentInput reads content from an argument, file, or stdin.
+func resolveContentInput(content, filePath string) (string, error) {
+	if content != "" {
+		return content, nil
+	}
+	if filePath != "" {
+		if filePath == "-" {
+			data, err := io.ReadAll(os.Stdin)
+			if err != nil {
+				return "", fmt.Errorf("reading stdin: %w", err)
+			}
+			return string(data), nil
+		}
+		data, err := os.ReadFile(filePath) //nolint:gosec // user-provided path
+		if err != nil {
+			return "", fmt.Errorf("reading file: %w", err)
+		}
+		return string(data), nil
+	}
+	// Check if stdin has data.
+	stat, _ := os.Stdin.Stat()
+	if (stat.Mode() & os.ModeCharDevice) == 0 {
+		data, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return "", fmt.Errorf("reading stdin: %w", err)
+		}
+		return string(data), nil
+	}
+	return "", nil
 }
 
 func docsWebViewLink(id string) string {
