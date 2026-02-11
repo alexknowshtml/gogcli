@@ -22,14 +22,14 @@ import (
 var newDocsService = googleapi.NewDocs
 
 type DocsCmd struct {
-	Export DocsExportCmd `cmd:"" name:"export" help:"Export a Google Doc (pdf|docx|txt)"`
-	Info   DocsInfoCmd   `cmd:"" name:"info" help:"Get Google Doc metadata"`
-	Create DocsCreateCmd `cmd:"" name:"create" help:"Create a Google Doc"`
-	Copy   DocsCopyCmd   `cmd:"" name:"copy" help:"Copy a Google Doc"`
-	Cat    DocsCatCmd    `cmd:"" name:"cat" help:"Print a Google Doc as plain text"`
-	Update DocsUpdateCmd `cmd:"" name:"update" help:"Update content in a Google Doc"`
+	Export   DocsExportCmd   `cmd:"" name:"export" help:"Export a Google Doc (pdf|docx|txt)"`
+	Info     DocsInfoCmd     `cmd:"" name:"info" help:"Get Google Doc metadata"`
+	Create   DocsCreateCmd   `cmd:"" name:"create" help:"Create a Google Doc"`
+	Copy     DocsCopyCmd     `cmd:"" name:"copy" help:"Copy a Google Doc"`
+	Cat      DocsCatCmd      `cmd:"" name:"cat" help:"Print a Google Doc as plain text"`
+	ListTabs DocsListTabsCmd `cmd:"" name:"list-tabs" help:"List all tabs in a Google Doc"`
+	Update   DocsUpdateCmd   `cmd:"" name:"update" help:"Update content in a Google Doc"`
 }
-
 type DocsExportCmd struct {
 	DocID  string         `arg:"" name:"docId" help:"Doc ID"`
 	Output OutputPathFlag `embed:""`
@@ -264,6 +264,8 @@ func (c *DocsCopyCmd) Run(ctx context.Context, flags *RootFlags) error {
 type DocsCatCmd struct {
 	DocID    string `arg:"" name:"docId" help:"Doc ID"`
 	MaxBytes int64  `name:"max-bytes" help:"Max bytes to read (0 = unlimited)" default:"2000000"`
+	Tab      string `name:"tab" help:"Tab title or ID to read (omit for default behavior)"`
+	AllTabs  bool   `name:"all-tabs" help:"Show all tabs with headers"`
 }
 
 func (c *DocsCatCmd) Run(ctx context.Context, flags *RootFlags) error {
@@ -282,6 +284,65 @@ func (c *DocsCatCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return err
 	}
 
+	// Use tabs API when --tab or --all-tabs is specified.
+	if c.Tab != "" || c.AllTabs {
+		doc, err := svc.Documents.Get(id).
+			IncludeTabsContent(true).
+			Context(ctx).
+			Do()
+		if err != nil {
+			if isDocsNotFound(err) {
+				return fmt.Errorf("doc not found or not a Google Doc (id=%s)", id)
+			}
+			return err
+		}
+		if doc == nil {
+			return errors.New("doc not found")
+		}
+
+		tabs := flattenTabs(doc.Tabs)
+
+		if c.Tab != "" {
+			tab := findTab(tabs, c.Tab)
+			if tab == nil {
+				return fmt.Errorf("tab not found: %s", c.Tab)
+			}
+			text := tabPlainText(tab, c.MaxBytes)
+			if outfmt.IsJSON(ctx) {
+				return outfmt.WriteJSON(os.Stdout, map[string]any{
+					"tab": tabJSON(tab, text),
+				})
+			}
+			_, err = io.WriteString(os.Stdout, text)
+			return err
+		}
+
+		// --all-tabs
+		if outfmt.IsJSON(ctx) {
+			var out []map[string]any
+			for _, tab := range tabs {
+				text := tabPlainText(tab, c.MaxBytes)
+				out = append(out, tabJSON(tab, text))
+			}
+			return outfmt.WriteJSON(os.Stdout, map[string]any{"tabs": out})
+		}
+
+		for i, tab := range tabs {
+			title := tabTitle(tab)
+			if i > 0 {
+				fmt.Fprintln(os.Stdout)
+			}
+			fmt.Fprintf(os.Stdout, "=== Tab: %s ===\n", title)
+			text := tabPlainText(tab, c.MaxBytes)
+			_, _ = io.WriteString(os.Stdout, text)
+			if text != "" && !strings.HasSuffix(text, "\n") {
+				fmt.Fprintln(os.Stdout)
+			}
+		}
+		return nil
+	}
+
+	// Default: original behavior (no tabs API).
 	doc, err := svc.Documents.Get(id).
 		Context(ctx).
 		Do()
@@ -478,6 +539,64 @@ func (c *DocsUpdateCmd) Run(ctx context.Context, flags *RootFlags) error {
 	return nil
 }
 
+type DocsListTabsCmd struct {
+	DocID string `arg:"" name:"docId" help:"Doc ID"`
+}
+
+func (c *DocsListTabsCmd) Run(ctx context.Context, flags *RootFlags) error {
+	u := ui.FromContext(ctx)
+	account, err := requireAccount(flags)
+	if err != nil {
+		return err
+	}
+
+	id := strings.TrimSpace(c.DocID)
+	if id == "" {
+		return usage("empty docId")
+	}
+
+	svc, err := newDocsService(ctx, account)
+	if err != nil {
+		return err
+	}
+
+	doc, err := svc.Documents.Get(id).
+		IncludeTabsContent(true).
+		Context(ctx).
+		Do()
+	if err != nil {
+		if isDocsNotFound(err) {
+			return fmt.Errorf("doc not found or not a Google Doc (id=%s)", id)
+		}
+		return err
+	}
+	if doc == nil {
+		return errors.New("doc not found")
+	}
+
+	tabs := flattenTabs(doc.Tabs)
+
+	if outfmt.IsJSON(ctx) {
+		var out []map[string]any
+		for _, tab := range tabs {
+			out = append(out, tabInfoJSON(tab))
+		}
+		return outfmt.WriteJSON(os.Stdout, map[string]any{"tabs": out})
+	}
+
+	u.Out().Printf("ID\tTITLE\tINDEX")
+	for _, tab := range tabs {
+		if tab.TabProperties != nil {
+			u.Out().Printf("%s\t%s\t%d",
+				tab.TabProperties.TabId,
+				tab.TabProperties.Title,
+				tab.TabProperties.Index,
+			)
+		}
+	}
+	return nil
+}
+
 func docsWebViewLink(id string) string {
 	id = strings.TrimSpace(id)
 	if id == "" {
@@ -563,6 +682,91 @@ func appendLimited(buf *bytes.Buffer, maxBytes int64, s string) bool {
 	}
 	_, _ = buf.WriteString(s)
 	return true
+}
+
+// flattenTabs recursively collects all tabs (including nested child tabs)
+// into a flat slice in document order.
+func flattenTabs(tabs []*docs.Tab) []*docs.Tab {
+	var result []*docs.Tab
+	for _, tab := range tabs {
+		if tab == nil {
+			continue
+		}
+		result = append(result, tab)
+		if len(tab.ChildTabs) > 0 {
+			result = append(result, flattenTabs(tab.ChildTabs)...)
+		}
+	}
+	return result
+}
+
+// findTab looks up a tab by title or ID (case-insensitive title match).
+func findTab(tabs []*docs.Tab, query string) *docs.Tab {
+	query = strings.TrimSpace(query)
+	// Try exact ID match first.
+	for _, tab := range tabs {
+		if tab.TabProperties != nil && tab.TabProperties.TabId == query {
+			return tab
+		}
+	}
+	// Fall back to case-insensitive title match.
+	lower := strings.ToLower(query)
+	for _, tab := range tabs {
+		if tab.TabProperties != nil && strings.ToLower(tab.TabProperties.Title) == lower {
+			return tab
+		}
+	}
+	return nil
+}
+
+// tabTitle returns the display title for a tab.
+func tabTitle(tab *docs.Tab) string {
+	if tab.TabProperties != nil && tab.TabProperties.Title != "" {
+		return tab.TabProperties.Title
+	}
+	return "(untitled)"
+}
+
+// tabPlainText extracts plain text from a tab's document content.
+func tabPlainText(tab *docs.Tab, maxBytes int64) string {
+	if tab == nil || tab.DocumentTab == nil || tab.DocumentTab.Body == nil {
+		return ""
+	}
+	var buf bytes.Buffer
+	for _, el := range tab.DocumentTab.Body.Content {
+		if !appendDocsElementText(&buf, maxBytes, el) {
+			break
+		}
+	}
+	return buf.String()
+}
+
+// tabJSON returns a JSON-friendly map for a tab with its text content.
+func tabJSON(tab *docs.Tab, text string) map[string]any {
+	m := map[string]any{"text": text}
+	if tab.TabProperties != nil {
+		m["id"] = tab.TabProperties.TabId
+		m["title"] = tab.TabProperties.Title
+		m["index"] = tab.TabProperties.Index
+	}
+	return m
+}
+
+// tabInfoJSON returns a JSON-friendly map for a tab's metadata (no content).
+func tabInfoJSON(tab *docs.Tab) map[string]any {
+	m := map[string]any{}
+	if tab.TabProperties != nil {
+		m["id"] = tab.TabProperties.TabId
+		m["title"] = tab.TabProperties.Title
+		m["index"] = tab.TabProperties.Index
+		if tab.TabProperties.NestingLevel > 0 {
+			m["nestingLevel"] = tab.TabProperties.NestingLevel
+		}
+		if tab.TabProperties.ParentTabId != "" {
+			m["parentTabId"] = tab.TabProperties.ParentTabId
+		}
+	}
+	return m
 }
 
 func isDocsNotFound(err error) bool {
