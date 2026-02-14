@@ -12,6 +12,7 @@
 - Drive: add upload conversion flags `--convert` (auto) and `--convert-to` (`doc|sheet|slides`). (#240) — thanks @Danielkweber.
 - Docs: add `docs create --file` to import Markdown into Google Docs with inline image support and hardened temp-file cleanup. (#244) — thanks @maxceem.
 - Docs/Slides: add `docs update` markdown formatting + table insertion, plus markdown-driven slides creation and template-based slide creation. (#219) — thanks @maxceem.
+- Docs: add tab support (`docs list-tabs`, `docs cat --tab`, `docs cat --all-tabs`) and editing commands (`docs write|insert|delete|find-replace`). (#225) — thanks @alexknowshtml.
 - Gmail: add `gmail labels delete <labelIdOrName>` with confirm + system-label guardrails and case-sensitive ID handling. (#231) — thanks @Helmi.
 
 ### Fixed

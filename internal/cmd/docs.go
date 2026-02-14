@@ -535,13 +535,21 @@ func (c *DocsCatCmd) runWithTabs(ctx context.Context, svc *docs.Service, id stri
 	for i, tab := range tabs {
 		title := tabTitle(tab)
 		if i > 0 {
-			fmt.Fprintln(os.Stdout)
+			if _, err := fmt.Fprintln(os.Stdout); err != nil {
+				return err
+			}
 		}
-		fmt.Fprintf(os.Stdout, "=== Tab: %s ===\n", title)
+		if _, err := fmt.Fprintf(os.Stdout, "=== Tab: %s ===\n", title); err != nil {
+			return err
+		}
 		text := tabPlainText(tab, c.MaxBytes)
-		_, _ = io.WriteString(os.Stdout, text)
+		if _, err := io.WriteString(os.Stdout, text); err != nil {
+			return err
+		}
 		if text != "" && !strings.HasSuffix(text, "\n") {
-			fmt.Fprintln(os.Stdout)
+			if _, err := fmt.Fprintln(os.Stdout); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -694,9 +702,22 @@ func (c *DocsWriteCmd) writePlainText(ctx context.Context, account, docID, conte
 		var doc *docs.Document
 		doc, err = svc.Documents.Get(docID).Context(ctx).Do()
 		if err != nil {
+			if isDocsNotFound(err) {
+				return fmt.Errorf("doc not found or not a Google Doc (id=%s)", docID)
+			}
 			return fmt.Errorf("getting document: %w", err)
 		}
-		endIndex := doc.Body.Content[len(doc.Body.Content)-1].EndIndex - 1
+		if doc == nil {
+			return errors.New("doc not found")
+		}
+
+		endIndex := int64(0)
+		if doc.Body != nil && len(doc.Body.Content) > 0 {
+			lastEl := doc.Body.Content[len(doc.Body.Content)-1]
+			if lastEl != nil && lastEl.EndIndex > 1 {
+				endIndex = lastEl.EndIndex - 1
+			}
+		}
 		if endIndex > 1 {
 			requests = append(requests, &docs.Request{
 				DeleteContentRange: &docs.DeleteContentRangeRequest{
