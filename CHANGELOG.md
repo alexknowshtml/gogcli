@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- Analytics/Search Console: add `analytics accounts|report` and `searchconsole sites|query` command groups for GA4 + GSC reporting. (#402) — thanks @haresh-seenivasagan.
 - Gmail: add `gmail autoreply` to reply once to matching messages, label the thread for dedupe, and optionally archive/mark read. Includes docs and regression coverage for skip/reply flows.
 
 ## 0.12.0 - 2026-03-09
