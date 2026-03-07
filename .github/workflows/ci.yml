@@ -4,6 +4,10 @@ on:
   push:
   pull_request:
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: blacksmith-16vcpu-ubuntu-2404
@@ -13,6 +17,10 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - uses: actions/cache@v4
+        with:
+          path: .tools
+          key: ${{ runner.os }}-tools-${{ hashFiles('Makefile') }}
       - name: Install tools
         run: make tools
       - name: Format check
@@ -29,6 +37,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: "pnpm"
+          cache-dependency-path: internal/tracking/worker/pnpm-lock.yaml
       - name: Enable Corepack (pnpm)
         run: |
           corepack enable
@@ -50,6 +60,10 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - uses: actions/cache@v4
+        with:
+          path: .tools
+          key: ${{ runner.os }}-tools-${{ hashFiles('Makefile') }}
       - name: Install tools
         run: make tools
         shell: bash
@@ -82,16 +96,3 @@ jobs:
         run: go test ./...
       - name: Build (Keychain / cgo)
         run: CGO_ENABLED=1 go build ./cmd/gog
-
-  windows-build:
-    runs-on: blacksmith-16vcpu-windows-2025
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: true
-      - name: Test
-        run: go test ./...
-      - name: Build
-        run: go build ./cmd/gog

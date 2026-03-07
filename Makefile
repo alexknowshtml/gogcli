@@ -19,6 +19,8 @@ TOOLS_DIR := $(CURDIR)/.tools
 GOFUMPT := $(TOOLS_DIR)/gofumpt
 GOIMPORTS := $(TOOLS_DIR)/goimports
 GOLANGCI_LINT := $(TOOLS_DIR)/golangci-lint
+TOOLS_STAMP := $(TOOLS_DIR)/.versions
+TOOLS_VERSION := gofumpt=v0.9.2;goimports=v0.42.0;golangci-lint=v2.10.1
 
 # Allow passing CLI args as extra "targets":
 #   make gogcli -- --help
@@ -60,9 +62,14 @@ help: gog-help
 
 tools:
 	@mkdir -p $(TOOLS_DIR)
-	@GOBIN=$(TOOLS_DIR) go install mvdan.cc/gofumpt@v0.9.2
-	@GOBIN=$(TOOLS_DIR) go install golang.org/x/tools/cmd/goimports@v0.42.0
-	@GOBIN=$(TOOLS_DIR) go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.10.1
+	@if [ -x "$(GOFUMPT)" ] && [ -x "$(GOIMPORTS)" ] && [ -x "$(GOLANGCI_LINT)" ] && [ "$$(cat $(TOOLS_STAMP) 2>/dev/null)" = "$(TOOLS_VERSION)" ]; then \
+		echo "tools up to date"; \
+	else \
+		GOBIN=$(TOOLS_DIR) go install mvdan.cc/gofumpt@v0.9.2; \
+		GOBIN=$(TOOLS_DIR) go install golang.org/x/tools/cmd/goimports@v0.42.0; \
+		GOBIN=$(TOOLS_DIR) go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.10.1; \
+		printf '%s\n' "$(TOOLS_VERSION)" > "$(TOOLS_STAMP)"; \
+	fi
 
 fmt: tools
 	@$(GOIMPORTS) -local github.com/steipete/gogcli -w .
