@@ -14,6 +14,7 @@
 - Calendar: respond patches only attendees to avoid custom reminders validation errors. (#265) — thanks @sebasrodriguez.
 - Contacts: fix grouped parameter types in CRUD helpers to restore builds on newer Go toolchains. (#355) — thanks @laihenyi.
 - Timezone: embed the IANA timezone database so Windows builds can resolve calendar timezones correctly. (#388) — thanks @visionik.
+- Google API: use transport-level response-header timeouts for API clients while keeping token exchanges bounded, so large downloads are not cut short by `http.Client.Timeout`. (#425) — thanks @laihenyi.
 - Gmail: add a fetch delay in `watch serve` so History API reads don't race message indexing. (#397) — thanks @salmonumbrella.
 - Gmail: allow Workspace-managed send-as aliases with empty verification status in `send` and `drafts create`. (#407) — thanks @salmonumbrella.
 - Gmail: preserve the selected `--client` during `watch serve` push handling instead of falling back to the default client. (#411) — thanks @chrysb.
