@@ -155,4 +155,14 @@ func TestPrepareCalendarID_Integration(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("empty defaults to primary when requested", func(t *testing.T) {
+		got, err := prepareCalendarID("", true)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != primaryCalendarID {
+			t.Fatalf("expected %q, got %q", primaryCalendarID, got)
+		}
+	})
 }

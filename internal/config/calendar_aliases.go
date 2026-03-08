@@ -32,7 +32,7 @@ func ResolveCalendarAlias(alias string) (string, bool, error) {
 func ResolveCalendarID(calendarID string) (string, error) {
 	calendarID = strings.TrimSpace(calendarID)
 	if calendarID == "" {
-		return "primary", nil
+		return "", nil
 	}
 
 	resolved, ok, err := ResolveCalendarAlias(calendarID)

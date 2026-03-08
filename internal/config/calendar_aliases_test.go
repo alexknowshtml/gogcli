@@ -47,14 +47,14 @@ func TestResolveCalendarID(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "xdg-config"))
 
-	// Empty returns primary
+	// Empty stays empty; command parsing owns default-primary behavior.
 	resolved, err := ResolveCalendarID("")
 	if err != nil {
 		t.Fatalf("resolve empty: %v", err)
 	}
 
-	if resolved != "primary" {
-		t.Fatalf("expected primary for empty, got %q", resolved)
+	if resolved != "" {
+		t.Fatalf("expected empty for empty input, got %q", resolved)
 	}
 
 	// Non-alias returns unchanged
