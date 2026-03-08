@@ -45,6 +45,7 @@ const (
 	mimePNG                = "image/png"
 	mimeTextPlain          = "text/plain"
 	mimeTextMarkdown       = "text/markdown"
+	mimeHTML               = "text/html"
 	extPDF                 = ".pdf"
 	extCSV                 = ".csv"
 	extXlsx                = ".xlsx"
@@ -53,6 +54,7 @@ const (
 	extPNG                 = ".png"
 	extTXT                 = ".txt"
 	extMD                  = ".md"
+	extHTML                = ".html"
 	formatAuto             = "auto"
 	driveShareToAnyone     = "anyone"
 	driveShareToUser       = "user"
@@ -1220,10 +1222,10 @@ func validateDriveDownloadFormatFlag(format string) error {
 		return nil
 	}
 	switch format {
-	case "pdf", "csv", "xlsx", "pptx", "txt", "png", "docx", "md":
+	case "pdf", "csv", "xlsx", "pptx", "txt", "png", "docx", "md", "html":
 		return nil
 	default:
-		return usagef("invalid --format %q (use pdf|csv|xlsx|pptx|txt|png|docx|md)", format)
+		return usagef("invalid --format %q (use pdf|csv|xlsx|pptx|txt|png|docx|md|html)", format)
 	}
 }
 
@@ -1286,8 +1288,10 @@ func driveExportMimeTypeForFormat(googleMimeType string, format string) (string,
 			return mimeTextPlain, nil
 		case "md":
 			return mimeTextMarkdown, nil
+		case "html":
+			return mimeHTML, nil
 		default:
-			return "", fmt.Errorf("invalid --format %q for Google Doc (use pdf|docx|txt|md)", format)
+			return "", fmt.Errorf("invalid --format %q for Google Doc (use pdf|docx|txt|md|html)", format)
 		}
 	case driveMimeGoogleSheet:
 		switch format {
@@ -1344,6 +1348,8 @@ func driveExportExtension(mimeType string) string {
 		return extTXT
 	case mimeTextMarkdown:
 		return extMD
+	case mimeHTML:
+		return extHTML
 	default:
 		return extPDF
 	}

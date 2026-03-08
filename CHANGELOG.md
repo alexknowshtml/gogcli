@@ -10,6 +10,7 @@
 - Sheets: add `add-tab`, `rename-tab`, and `delete-tab` commands for managing spreadsheet tabs, with delete dry-run/confirmation guardrails. (#309) — thanks @JulienMalige.
 - Docs: add `--tab-id` to editing commands so write/update/insert/delete/find-replace can target a specific Google Docs tab. (#330) — thanks @ignacioreyna.
 - Docs: add native Google Docs Markdown export via `docs export --format md`. (#282) — thanks @fprochazka.
+- Docs: add native Google Docs HTML export via `docs export --format html`. (#141) — thanks @in-liberty420.
 - Auth: add `auth add --redirect-uri` for manual/remote OAuth flows, so custom callback hosts can be reused across the printed auth URL, state cache, and code exchange. (#398) — thanks @salmonumbrella.
 - Auth: add `--extra-scopes` to `auth add` for appending custom OAuth scope URIs beyond the built-in service scopes. (#421) — thanks @peteradams2026.
 - Gmail: add `gmail labels rename` to rename user labels by ID or exact name, with system-label guards and wrong-case ID safety. (#391) — thanks @adam-zethraeus.

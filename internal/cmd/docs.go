@@ -40,7 +40,7 @@ type DocsCmd struct {
 type DocsExportCmd struct {
 	DocID  string         `arg:"" name:"docId" help:"Doc ID"`
 	Output OutputPathFlag `embed:""`
-	Format string         `name:"format" help:"Export format: pdf|docx|txt|md" default:"pdf"`
+	Format string         `name:"format" help:"Export format: pdf|docx|txt|md|html" default:"pdf"`
 }
 
 func (c *DocsExportCmd) Run(ctx context.Context, flags *RootFlags) error {
