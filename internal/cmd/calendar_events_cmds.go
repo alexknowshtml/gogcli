@@ -5,7 +5,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/steipete/gogcli/internal/config"
 	"github.com/steipete/gogcli/internal/outfmt"
 	"github.com/steipete/gogcli/internal/ui"
 )
@@ -50,31 +49,13 @@ func (c *CalendarEventsCmd) Run(ctx context.Context, flags *RootFlags) error {
 	if calendarID != "" && len(calInputs) > 0 {
 		return usage("calendarId not allowed with --cal/--calendars")
 	}
-	if !c.All && calendarID == "" && len(calInputs) == 0 {
-		calendarID = primaryCalendarID
-	}
-	if calendarID != "" {
-		calendarID, err = resolveCalendarAliasID(calendarID)
-		if err != nil {
-			return err
-		}
-	}
-	for i, input := range calInputs {
-		resolved, ok, resolveErr := config.ResolveCalendarAlias(input)
-		if resolveErr != nil {
-			return resolveErr
-		}
-		if ok {
-			calInputs[i] = resolved
-		}
-	}
 
 	svc, err := newCalendarService(ctx, account)
 	if err != nil {
 		return err
 	}
-	if !c.All {
-		calendarID, err = resolveCalendarID(ctx, svc, calendarID)
+	if !c.All && len(calInputs) == 0 {
+		calendarID, err = resolveCalendarSelector(ctx, svc, calendarID, true)
 		if err != nil {
 			return err
 		}
@@ -122,15 +103,7 @@ func (c *CalendarEventCmd) Run(ctx context.Context, flags *RootFlags) error {
 	if err != nil {
 		return err
 	}
-	calendarID := strings.TrimSpace(c.CalendarID)
 	eventID := normalizeCalendarEventID(c.EventID)
-	if calendarID == "" {
-		return usage("empty calendarId")
-	}
-	calendarID, err = resolveCalendarAliasID(calendarID)
-	if err != nil {
-		return err
-	}
 	if eventID == "" {
 		return usage("empty eventId")
 	}
@@ -139,7 +112,7 @@ func (c *CalendarEventCmd) Run(ctx context.Context, flags *RootFlags) error {
 	if err != nil {
 		return err
 	}
-	calendarID, err = resolveCalendarID(ctx, svc, calendarID)
+	calendarID, err := resolveCalendarSelector(ctx, svc, c.CalendarID, false)
 	if err != nil {
 		return err
 	}

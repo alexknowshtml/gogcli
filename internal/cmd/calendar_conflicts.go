@@ -44,13 +44,9 @@ func (c *CalendarConflictsCmd) Run(ctx context.Context, flags *RootFlags) error 
 	}
 
 	// Resolve aliases for all calendar IDs
-	resolvedIDs := make([]string, 0, len(calendarIDs))
-	for _, id := range calendarIDs {
-		resolved, resolveErr := resolveCalendarAliasID(id)
-		if resolveErr != nil {
-			return resolveErr
-		}
-		resolvedIDs = append(resolvedIDs, resolved)
+	resolvedIDs, err := prepareCalendarIDs(calendarIDs)
+	if err != nil {
+		return err
 	}
 
 	svc, err := newCalendarService(ctx, account)
