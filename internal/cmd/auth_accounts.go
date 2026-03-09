@@ -452,10 +452,10 @@ func (c *AuthKeepCmd) Run(ctx context.Context, _ *RootFlags) error {
 		return err
 	}
 
-	if err := os.WriteFile(destPath, data, 0o600); err != nil { //nolint:gosec // config-derived destination path
+	if err := os.WriteFile(destPath, data, 0o600); err != nil {
 		return fmt.Errorf("write service account: %w", err)
 	}
-	if err := os.WriteFile(genericPath, data, 0o600); err != nil { //nolint:gosec // config-derived destination path
+	if err := os.WriteFile(genericPath, data, 0o600); err != nil {
 		return fmt.Errorf("write service account: %w", err)
 	}
 
