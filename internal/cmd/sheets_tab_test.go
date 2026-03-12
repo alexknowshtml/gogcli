@@ -44,7 +44,7 @@ func TestSheetsTabCommands(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"replies": []map[string]any{
-					{"addSheet": map[string]any{"properties": map[string]any{"sheetId": 99, "title": "NewTab"}}},
+					{"addSheet": map[string]any{"properties": map[string]any{"sheetId": 99, "title": "NewTab", "index": 0}}},
 				},
 			})
 			return
@@ -83,6 +83,20 @@ func TestSheetsTabCommands(t *testing.T) {
 		}
 		if gotRequests[0].AddSheet.Properties.Title != "NewTab" {
 			t.Fatalf("unexpected title: %s", gotRequests[0].AddSheet.Properties.Title)
+		}
+	})
+
+	t.Run("add-tab with index", func(t *testing.T) {
+		gotRequests = nil
+		cmd := &SheetsAddTabCmd{}
+		if err := runKong(t, cmd, []string{"s1", "NewTab", "--index", "2"}, ctx, flags); err != nil {
+			t.Fatalf("add-tab with index: %v", err)
+		}
+		if len(gotRequests) != 1 || gotRequests[0].AddSheet == nil {
+			t.Fatalf("expected addSheet request, got %+v", gotRequests)
+		}
+		if gotRequests[0].AddSheet.Properties.Index != 2 {
+			t.Fatalf("unexpected index: %d, want 2", gotRequests[0].AddSheet.Properties.Index)
 		}
 	})
 

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 
@@ -14,6 +15,7 @@ import (
 type SheetsAddTabCmd struct {
 	SpreadsheetID string `arg:"" name:"spreadsheetId" help:"Spreadsheet ID"`
 	TabName       string `arg:"" name:"tabName" help:"Name for the new tab/sheet"`
+	Index         *int64 `name:"index" help:"Tab position (0-based; 0 = first tab)"`
 }
 
 func (c *SheetsAddTabCmd) Run(ctx context.Context, flags *RootFlags) error {
@@ -28,10 +30,14 @@ func (c *SheetsAddTabCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return usage("empty tabName")
 	}
 
-	if err := dryRunExit(ctx, flags, "sheets.add-tab", map[string]any{
+	dryRunPayload := map[string]any{
 		"spreadsheet_id": spreadsheetID,
 		"tab_name":       tabName,
-	}); err != nil {
+	}
+	if c.Index != nil {
+		dryRunPayload["index"] = *c.Index
+	}
+	if err := dryRunExit(ctx, flags, "sheets.add-tab", dryRunPayload); err != nil {
 		return err
 	}
 
@@ -45,13 +51,19 @@ func (c *SheetsAddTabCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return err
 	}
 
+	props := &sheets.SheetProperties{
+		Title: tabName,
+	}
+	if c.Index != nil {
+		props.Index = *c.Index
+		props.ForceSendFields = []string{"Index"}
+	}
+
 	req := &sheets.BatchUpdateSpreadsheetRequest{
 		Requests: []*sheets.Request{
 			{
 				AddSheet: &sheets.AddSheetRequest{
-					Properties: &sheets.SheetProperties{
-						Title: tabName,
-					},
+					Properties: props,
 				},
 			},
 		},
@@ -62,20 +74,25 @@ func (c *SheetsAddTabCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return err
 	}
 
-	var newSheetID int64
+	var resultTitle string
+	var resultSheetID int64
+	var resultIndex int64
 	if len(resp.Replies) > 0 && resp.Replies[0].AddSheet != nil {
-		newSheetID = resp.Replies[0].AddSheet.Properties.SheetId
+		p := resp.Replies[0].AddSheet.Properties
+		resultTitle = p.Title
+		resultSheetID = p.SheetId
+		resultIndex = p.Index
 	}
 
 	if outfmt.IsJSON(ctx) {
 		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
-			"spreadsheetId": spreadsheetID,
-			"tabName":       tabName,
-			"sheetId":       newSheetID,
+			"title":   resultTitle,
+			"sheetId": resultSheetID,
+			"index":   resultIndex,
 		})
 	}
 
-	u.Out().Printf("Added tab %q (sheetId %d) to spreadsheet %s", tabName, newSheetID, spreadsheetID)
+	u.Out().Printf("Added tab %q (sheetId %d, index %d) to spreadsheet %s", resultTitle, resultSheetID, resultIndex, spreadsheetID)
 	return nil
 }
 
@@ -148,10 +165,9 @@ func (c *SheetsRenameTabCmd) Run(ctx context.Context, flags *RootFlags) error {
 
 	if outfmt.IsJSON(ctx) {
 		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
-			"spreadsheetId": spreadsheetID,
-			"oldName":       oldName,
-			"newName":       newName,
-			"sheetId":       sheetID,
+			"sheetId":  sheetID,
+			"oldTitle": oldName,
+			"newTitle": newName,
 		})
 	}
 
@@ -195,15 +211,11 @@ func (c *SheetsDeleteTabCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return usagef("unknown tab %q", tabName)
 	}
 
-	if err := dryRunExit(ctx, flags, "sheets.delete-tab", map[string]any{
+	if err := dryRunAndConfirmDestructive(ctx, flags, "sheets.delete-tab", map[string]any{
 		"spreadsheet_id": spreadsheetID,
 		"tab_name":       tabName,
 		"sheet_id":       sheetID,
-	}); err != nil {
-		return err
-	}
-
-	if err := confirmDestructiveChecked(ctx, flagsWithoutDryRun(flags), "delete sheet tab "+tabName); err != nil {
+	}, fmt.Sprintf("delete sheet tab %s", tabName)); err != nil {
 		return err
 	}
 
@@ -223,9 +235,9 @@ func (c *SheetsDeleteTabCmd) Run(ctx context.Context, flags *RootFlags) error {
 
 	if outfmt.IsJSON(ctx) {
 		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
-			"spreadsheetId": spreadsheetID,
-			"tabName":       tabName,
-			"sheetId":       sheetID,
+			"sheetId": sheetID,
+			"title":   tabName,
+			"deleted": true,
 		})
 	}
 
