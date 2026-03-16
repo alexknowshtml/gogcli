@@ -21,6 +21,7 @@ func newCalendarCmd(flags *rootFlags) *cobra.Command {
 		Short: "Google Calendar",
 	}
 	cmd.AddCommand(newCalendarCalendarsCmd(flags))
+	cmd.AddCommand(newCalendarCreateCalendarCmd(flags))
 	cmd.AddCommand(newCalendarAclCmd(flags))
 	cmd.AddCommand(newCalendarEventsCmd(flags))
 	cmd.AddCommand(newCalendarEventCmd(flags))
