@@ -1,0 +1,268 @@
+{
+  "sha": "46bb78b2c28a27100d293f64cd02fccf86d1bba7",
+  "shortSha": "46bb78b2c",
+  "parentSha": "4b06fabb4c62551be5eb72b4624f95e84cdac2fd",
+  "timestamp": "2026-03-11T20:03:52-04:00",
+  "message": "feat(sheets): add tab management commands (add-tab, rename-tab, delete-tab)",
+  "files": {
+    "internal/cmd/sheets.go": {
+      "path": "internal/cmd/sheets.go",
+      "summary": {
+        "mine": 66,
+        "machine": 0,
+        "ours": 0
+      },
+      "segments": [
+        {
+          "line": 48,
+          "colStart": 60,
+          "colEnd": 80,
+          "category": "mine",
+          "source": "Human edit"
+        },
+        {
+          "line": 49,
+          "colStart": 63,
+          "colEnd": 86,
+          "category": "mine",
+          "source": "Human edit"
+        },
+        {
+          "line": 50,
+          "colStart": 63,
+          "colEnd": 86,
+          "category": "mine",
+          "source": "Human edit"
+        }
+      ]
+    },
+    "internal/cmd/sheets_tab.go": {
+      "path": "internal/cmd/sheets_tab.go",
+      "summary": {
+        "mine": 0,
+        "machine": 704,
+        "ours": 0
+      },
+      "segments": [
+        {
+          "line": 4,
+          "colStart": 0,
+          "colEnd": 0,
+          "category": "machine",
+          "source": "Write tool call"
+        },
+        {
+          "line": 17,
+          "colStart": 0,
+          "colEnd": 0,
+          "category": "machine",
+          "source": "Write tool call"
+        },
+        {
+          "line": 32,
+          "colStart": 1,
+          "colEnd": 17,
+          "category": "machine",
+          "source": "Write tool call"
+        },
+        {
+          "line": 35,
+          "colStart": 2,
+          "colEnd": 65,
+          "category": "machine",
+          "source": "Write tool call"
+        },
+        {
+          "line": 53,
+          "colStart": 0,
+          "colEnd": 0,
+          "category": "machine",
+          "source": "Write tool call"
+        },
+        {
+          "line": 65,
+          "colStart": 17,
+          "colEnd": 22,
+          "category": "machine",
+          "source": "Write tool call"
+        },
+        {
+          "line": 76,
+          "colStart": 5,
+          "colEnd": 16,
+          "category": "machine",
+          "source": "Write tool call"
+        },
+        {
+          "line": 80,
+          "colStart": 2,
+          "colEnd": 5,
+          "category": "machine",
+          "source": "Write tool call"
+        },
+        {
+          "line": 80,
+          "colStart": 42,
+          "colEnd": 23,
+          "category": "machine",
+          "source": "Write tool call"
+        },
+        {
+          "line": 88,
+          "colStart": 4,
+          "colEnd": 4,
+          "category": "machine",
+          "source": "Write tool call"
+        },
+        {
+          "line": 89,
+          "colStart": 14,
+          "colEnd": 21,
+          "category": "machine",
+          "source": "Write tool call"
+        },
+        {
+          "line": 90,
+          "colStart": 4,
+          "colEnd": 25,
+          "category": "machine",
+          "source": "Write tool call"
+        },
+        {
+          "line": 94,
+          "colStart": 39,
+          "colEnd": 49,
+          "category": "machine",
+          "source": "Write tool call"
+        },
+        {
+          "line": 94,
+          "colStart": 73,
+          "colEnd": 112,
+          "category": "machine",
+          "source": "Write tool call"
+        },
+        {
+          "line": 167,
+          "colStart": 14,
+          "colEnd": 15,
+          "category": "machine",
+          "source": "Write tool call"
+        },
+        {
+          "line": 168,
+          "colStart": 7,
+          "colEnd": 14,
+          "category": "machine",
+          "source": "Write tool call"
+        },
+        {
+          "line": 169,
+          "colStart": 7,
+          "colEnd": 22,
+          "category": "machine",
+          "source": "Write tool call"
+        },
+        {
+          "line": 213,
+          "colStart": 17,
+          "colEnd": 38,
+          "category": "machine",
+          "source": "Write tool call"
+        },
+        {
+          "line": 217,
+          "colStart": 2,
+          "colEnd": 16,
+          "category": "machine",
+          "source": "Write tool call"
+        },
+        {
+          "line": 217,
+          "colStart": 34,
+          "colEnd": 39,
+          "category": "machine",
+          "source": "Write tool call"
+        },
+        {
+          "line": 217,
+          "colStart": 47,
+          "colEnd": 48,
+          "category": "machine",
+          "source": "Write tool call"
+        },
+        {
+          "line": 238,
+          "colStart": 5,
+          "colEnd": 8,
+          "category": "machine",
+          "source": "Write tool call"
+        },
+        {
+          "line": 239,
+          "colStart": 4,
+          "colEnd": 7,
+          "category": "machine",
+          "source": "Write tool call"
+        },
+        {
+          "line": 239,
+          "colStart": 9,
+          "colEnd": 10,
+          "category": "machine",
+          "source": "Write tool call"
+        },
+        {
+          "line": 239,
+          "colStart": 14,
+          "colEnd": 18,
+          "category": "machine",
+          "source": "Write tool call"
+        }
+      ]
+    },
+    "internal/cmd/sheets_tab_test.go": {
+      "path": "internal/cmd/sheets_tab_test.go",
+      "summary": {
+        "mine": 0,
+        "machine": 531,
+        "ours": 0
+      },
+      "segments": [
+        {
+          "line": 46,
+          "colStart": 94,
+          "colEnd": 106,
+          "category": "machine",
+          "source": "Write tool call"
+        },
+        {
+          "line": 88,
+          "colStart": 0,
+          "colEnd": 0,
+          "category": "machine",
+          "source": "Write tool call"
+        }
+      ]
+    }
+  },
+  "totals": {
+    "mine": 66,
+    "machine": 1235,
+    "ours": 0,
+    "percent": {
+      "mine": 5,
+      "machine": 95,
+      "ours": 0
+    }
+  },
+  "sessions": [
+    "ba694c7d-06d6-445f-bcd9-e56e98313e63"
+  ],
+  "meta": {
+    "analyzedAt": "2026-03-12T00:03:52.348Z",
+    "version": "0.2.0",
+    "retroactive": false,
+    "confidence": 0.95
+  }
+}

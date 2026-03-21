@@ -1,0 +1,44 @@
+{
+  "sha": "5b0322b815d0182503a77dd2ef238efedd409a66",
+  "shortSha": "5b0322b81",
+  "parentSha": "d25dbfdc5ed43e990658dcd3957b775d9a5ef55c",
+  "timestamp": "2026-03-16T19:54:22-04:00",
+  "message": "Add `calendar create-calendar` command",
+  "files": {
+    "internal/cmd/calendar.go": {
+      "path": "internal/cmd/calendar.go",
+      "summary": {
+        "mine": 19292,
+        "machine": 0,
+        "ours": 0
+      },
+      "segments": []
+    },
+    "internal/cmd/calendar_create_calendar.go": {
+      "path": "internal/cmd/calendar_create_calendar.go",
+      "summary": {
+        "mine": 1873,
+        "machine": 0,
+        "ours": 0
+      },
+      "segments": []
+    }
+  },
+  "totals": {
+    "mine": 21165,
+    "machine": 0,
+    "ours": 0,
+    "percent": {
+      "mine": 100,
+      "machine": 0,
+      "ours": 0
+    }
+  },
+  "sessions": [],
+  "meta": {
+    "analyzedAt": "2026-03-16T23:54:22.827Z",
+    "version": "0.2.0",
+    "retroactive": false,
+    "confidence": 1
+  }
+}
