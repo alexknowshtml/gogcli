@@ -201,6 +201,7 @@ Flag aliases:
 - `gog drive drives [--max N] [--page TOKEN] [--query Q]`
 - `gog slides thumbnail <presentationId> <slideId> [--size small|medium|large] [--format png|jpeg] [--out PATH]`
 - `gog calendar calendars`
+- `gog calendar create-calendar <summary> [--description D] [--timezone TZ] [--location L]`
 - `gog calendar acl <calendarId>`
 - `gog calendar events <calendarId> [--cal ID_OR_NAME] [--calendars CSV] [--all] [--from RFC3339] [--to RFC3339] [--max N] [--page TOKEN] [--query Q] [--weekday]`
 - `gog calendar event|get <calendarId> <eventId>`

@@ -31,22 +31,27 @@ func (c *CalendarCreateCalendarCmd) Run(ctx context.Context, flags *RootFlags) e
 		return err
 	}
 
-	svc, err := newCalendarService(ctx, account)
-	if err != nil {
-		return err
-	}
-
 	cal := &calendar.Calendar{
 		Summary:     summary,
 		Description: strings.TrimSpace(c.Description),
 		TimeZone:    strings.TrimSpace(c.TimeZone),
 		Location:    strings.TrimSpace(c.Location),
 	}
+	if cal.TimeZone != "" {
+		if _, tzErr := loadTimezoneLocation(cal.TimeZone); tzErr != nil {
+			return fmt.Errorf("invalid timezone %q: %w", cal.TimeZone, tzErr)
+		}
+	}
 
 	if dryRunErr := dryRunExit(ctx, flags, "calendar.create-calendar", map[string]any{
 		"calendar": cal,
 	}); dryRunErr != nil {
 		return dryRunErr
+	}
+
+	svc, err := newCalendarService(ctx, account)
+	if err != nil {
+		return err
 	}
 
 	created, err := svc.Calendars.Insert(cal).Context(ctx).Do()
@@ -65,6 +70,9 @@ func (c *CalendarCreateCalendarCmd) Run(ctx context.Context, flags *RootFlags) e
 	}
 	if created.Description != "" {
 		u.Out().Printf("description\t%s", created.Description)
+	}
+	if created.Location != "" {
+		u.Out().Printf("location\t%s", created.Location)
 	}
 	return nil
 }

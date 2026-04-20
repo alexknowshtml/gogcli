@@ -745,6 +745,7 @@ Docs: `docs/email-tracking.md` (setup/deploy) + `docs/email-tracking-worker.md` 
 ```bash
 # Calendars
 gog calendar calendars
+gog calendar create-calendar "Team Calendar" --timezone Europe/London
 gog calendar acl <calendarId>         # List access control rules
 gog calendar colors                   # List available event/calendar colors
 gog calendar time --timezone America/New_York
