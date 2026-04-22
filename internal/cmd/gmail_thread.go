@@ -377,6 +377,18 @@ func bestBodyText(p *gmail.MessagePart) string {
 	return html
 }
 
+func bestBodyHTML(p *gmail.MessagePart) string {
+	if p == nil {
+		return ""
+	}
+	html := findPartBody(p, "text/html")
+	if html != "" {
+		return html
+	}
+	plain := findPartBody(p, "text/plain")
+	return plain
+}
+
 func bestBodyForDisplay(p *gmail.MessagePart) (string, bool) {
 	if p == nil {
 		return "", false
