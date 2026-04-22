@@ -1,0 +1,44 @@
+{
+  "sha": "4a477a05f2f16b649211e2c77ad9e1c8c7f6e777",
+  "shortSha": "4a477a05f",
+  "parentSha": "0d0d95a00c41d5f05ecadf22f44788bd5163b2fc",
+  "timestamp": "2026-04-21T21:42:31-04:00",
+  "message": "Add byline commit classification cache files",
+  "files": {
+    ".byline/commits/0d0d95a00.json": {
+      "path": ".byline/commits/0d0d95a00.json",
+      "summary": {
+        "mine": 2214,
+        "machine": 0,
+        "ours": 0
+      },
+      "segments": []
+    },
+    ".byline/commits/c9f2e83f2.json": {
+      "path": ".byline/commits/c9f2e83f2.json",
+      "summary": {
+        "mine": 1379,
+        "machine": 0,
+        "ours": 0
+      },
+      "segments": []
+    }
+  },
+  "totals": {
+    "mine": 3593,
+    "machine": 0,
+    "ours": 0,
+    "percent": {
+      "mine": 100,
+      "machine": 0,
+      "ours": 0
+    }
+  },
+  "sessions": [],
+  "meta": {
+    "analyzedAt": "2026-04-22T01:42:31.526Z",
+    "version": "0.2.0",
+    "retroactive": false,
+    "confidence": 1
+  }
+}

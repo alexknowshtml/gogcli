@@ -28,6 +28,7 @@ type GmailMessagesSearchCmd struct {
 	Timezone    string   `name:"timezone" short:"z" help:"Output timezone (IANA name, e.g. America/New_York, UTC). Default: local"`
 	Local       bool     `name:"local" help:"Use local timezone (default behavior, useful to override --timezone)"`
 	IncludeBody bool     `name:"include-body" help:"Include decoded message body (JSON is full; text output is truncated)"`
+	BodyFormat  string   `name:"body-format" help:"Body format preference: text (default) or html" default:"text" enum:"text,html"`
 	Full        bool     `name:"full" help:"Show full message bodies without truncation (implies --include-body)"`
 }
 
@@ -107,7 +108,7 @@ func (c *GmailMessagesSearchCmd) Run(ctx context.Context, flags *RootFlags) erro
 		return err
 	}
 
-	items, err := fetchMessageDetails(ctx, svc, messages, idToName, loc, c.IncludeBody)
+	items, err := fetchMessageDetails(ctx, svc, messages, idToName, loc, c.IncludeBody, c.BodyFormat)
 	if err != nil {
 		return err
 	}
@@ -225,7 +226,8 @@ type messageItem struct {
 	Body     string   `json:"body,omitempty"`
 }
 
-func fetchMessageDetails(ctx context.Context, svc *gmail.Service, messages []*gmail.Message, idToName map[string]string, loc *time.Location, includeBody bool) ([]messageItem, error) {
+func fetchMessageDetails(ctx context.Context, svc *gmail.Service, messages []*gmail.Message, idToName map[string]string, loc *time.Location, includeBody bool, bodyFormat ...string) ([]messageItem, error) {
+	preferHTML := len(bodyFormat) > 0 && bodyFormat[0] == "html"
 	if len(messages) == 0 {
 		return nil, nil
 	}
@@ -282,7 +284,11 @@ func fetchMessageDetails(ctx context.Context, svc *gmail.Service, messages []*gm
 			item.Subject = sanitizeTab(headerValue(msg.Payload, "Subject"))
 			item.Date = formatGmailDateInLocation(headerValue(msg.Payload, "Date"), loc)
 			if includeBody {
-				item.Body = bestBodyText(msg.Payload)
+				if preferHTML {
+					item.Body = bestBodyHTML(msg.Payload)
+				} else {
+					item.Body = bestBodyText(msg.Payload)
+				}
 			}
 
 			if len(msg.LabelIds) > 0 {
