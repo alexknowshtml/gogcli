@@ -1,0 +1,114 @@
+{
+  "sha": "cb5499ed7b4d20a863de1aef07c58c94ecd9a9fe",
+  "shortSha": "cb5499ed7",
+  "parentSha": "5cd913e28780d330f27aaaabc7bfb6413491850a",
+  "timestamp": "2026-04-21T21:47:15-04:00",
+  "message": "feat(gmail): add --body-format flag to messages search",
+  "files": {
+    ".byline/commits/4a477a05f.json": {
+      "path": ".byline/commits/4a477a05f.json",
+      "summary": {
+        "mine": 974,
+        "machine": 0,
+        "ours": 0
+      },
+      "segments": [
+        {
+          "line": 0,
+          "colStart": 0,
+          "colEnd": 1,
+          "category": "mine",
+          "source": "Human edit"
+        }
+      ]
+    },
+    "internal/cmd/gmail_messages.go": {
+      "path": "internal/cmd/gmail_messages.go",
+      "summary": {
+        "mine": 310,
+        "machine": 0,
+        "ours": 0
+      },
+      "segments": [
+        {
+          "line": 30,
+          "colStart": 0,
+          "colEnd": 0,
+          "category": "mine",
+          "source": "Human edit"
+        },
+        {
+          "line": 110,
+          "colStart": 83,
+          "colEnd": 97,
+          "category": "mine",
+          "source": "Human edit"
+        },
+        {
+          "line": 228,
+          "colStart": 157,
+          "colEnd": 179,
+          "category": "mine",
+          "source": "Human edit"
+        },
+        {
+          "line": 229,
+          "colStart": 0,
+          "colEnd": 0,
+          "category": "mine",
+          "source": "Human edit"
+        },
+        {
+          "line": 286,
+          "colStart": 0,
+          "colEnd": 1,
+          "category": "mine",
+          "source": "Human edit"
+        },
+        {
+          "line": 290,
+          "colStart": 0,
+          "colEnd": 0,
+          "category": "mine",
+          "source": "Human edit"
+        }
+      ]
+    },
+    "internal/cmd/gmail_thread.go": {
+      "path": "internal/cmd/gmail_thread.go",
+      "summary": {
+        "mine": 208,
+        "machine": 0,
+        "ours": 0
+      },
+      "segments": [
+        {
+          "line": 379,
+          "colStart": 0,
+          "colEnd": 0,
+          "category": "mine",
+          "source": "Human edit"
+        }
+      ]
+    }
+  },
+  "totals": {
+    "mine": 1492,
+    "machine": 0,
+    "ours": 0,
+    "percent": {
+      "mine": 100,
+      "machine": 0,
+      "ours": 0
+    }
+  },
+  "sessions": [
+    "41b0661a-26b7-45ce-b5b6-3468fd6577a7"
+  ],
+  "meta": {
+    "analyzedAt": "2026-04-22T02:00:24.109Z",
+    "version": "0.2.0",
+    "retroactive": false,
+    "confidence": 0.95
+  }
+}

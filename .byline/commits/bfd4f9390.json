@@ -1,0 +1,114 @@
+{
+  "sha": "bfd4f93902ce15fbf356d0b64c5f41cbdc15cd0d",
+  "shortSha": "bfd4f9390",
+  "parentSha": "1537a9b00a504d0825800614bc8587adcb6c6c49",
+  "timestamp": "2026-04-21T21:47:15-04:00",
+  "message": "feat(gmail): add --body-format flag to messages search",
+  "files": {
+    ".byline/commits/4a477a05f.json": {
+      "path": ".byline/commits/4a477a05f.json",
+      "summary": {
+        "mine": 974,
+        "machine": 0,
+        "ours": 0
+      },
+      "segments": [
+        {
+          "line": 0,
+          "colStart": 0,
+          "colEnd": 1,
+          "category": "mine",
+          "source": "Human edit"
+        }
+      ]
+    },
+    "internal/cmd/gmail_messages.go": {
+      "path": "internal/cmd/gmail_messages.go",
+      "summary": {
+        "mine": 0,
+        "machine": 310,
+        "ours": 0
+      },
+      "segments": [
+        {
+          "line": 30,
+          "colStart": 0,
+          "colEnd": 0,
+          "category": "machine",
+          "source": "Edit tool call"
+        },
+        {
+          "line": 110,
+          "colStart": 83,
+          "colEnd": 97,
+          "category": "machine",
+          "source": "Edit tool call"
+        },
+        {
+          "line": 228,
+          "colStart": 157,
+          "colEnd": 179,
+          "category": "machine",
+          "source": "Edit tool call"
+        },
+        {
+          "line": 229,
+          "colStart": 0,
+          "colEnd": 0,
+          "category": "machine",
+          "source": "Edit tool call"
+        },
+        {
+          "line": 286,
+          "colStart": 0,
+          "colEnd": 1,
+          "category": "machine",
+          "source": "Edit tool call"
+        },
+        {
+          "line": 290,
+          "colStart": 0,
+          "colEnd": 0,
+          "category": "machine",
+          "source": "Edit tool call"
+        }
+      ]
+    },
+    "internal/cmd/gmail_thread.go": {
+      "path": "internal/cmd/gmail_thread.go",
+      "summary": {
+        "mine": 0,
+        "machine": 208,
+        "ours": 0
+      },
+      "segments": [
+        {
+          "line": 379,
+          "colStart": 0,
+          "colEnd": 0,
+          "category": "machine",
+          "source": "Edit tool call"
+        }
+      ]
+    }
+  },
+  "totals": {
+    "mine": 974,
+    "machine": 518,
+    "ours": 0,
+    "percent": {
+      "mine": 65,
+      "machine": 35,
+      "ours": 0
+    }
+  },
+  "sessions": [
+    "b12c1f2e-924e-4128-867d-33a78851ea26"
+  ],
+  "meta": {
+    "analyzedAt": "2026-04-22T01:47:15.478Z",
+    "version": "0.2.0",
+    "retroactive": false,
+    "confidence": 0.95
+  }
+}
