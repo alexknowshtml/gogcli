@@ -3,8 +3,9 @@ package cmd
 import (
 	"context"
 
-	"github.com/steipete/gogcli/internal/googleapi"
 	"google.golang.org/api/people/v1"
+
+	"github.com/steipete/gogcli/internal/googleapi"
 )
 
 var (

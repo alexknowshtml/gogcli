@@ -25,15 +25,15 @@ func parseDurationSeconds(raw string) (time.Duration, error) {
 	return time.ParseDuration(trimmed)
 }
 
-func truncateUTF8Bytes(s string, max int) (string, bool) {
-	if max <= 0 {
+func truncateUTF8Bytes(s string, maxBytes int) (string, bool) {
+	if maxBytes <= 0 {
 		return "", false
 	}
 	b := []byte(s)
-	if len(b) <= max {
+	if len(b) <= maxBytes {
 		return s, false
 	}
-	b = b[:max]
+	b = b[:maxBytes]
 	for !utf8.Valid(b) {
 		b = b[:len(b)-1]
 	}
@@ -68,4 +68,22 @@ func resolveLabelIDsWithService(svc *gmail.Service, labels []string) ([]string, 
 		out = append(out, trimmed)
 	}
 	return out, nil
+}
+
+func stringSet(items []string) map[string]struct{} {
+	if len(items) == 0 {
+		return nil
+	}
+	out := make(map[string]struct{}, len(items))
+	for _, item := range items {
+		v := strings.TrimSpace(item)
+		if v == "" {
+			continue
+		}
+		out[v] = struct{}{}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }

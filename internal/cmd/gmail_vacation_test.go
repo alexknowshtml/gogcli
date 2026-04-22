@@ -83,7 +83,7 @@ func TestStripHTML(t *testing.T) {
 		{
 			name:  "html content",
 			input: "<p>Hello world</p>",
-			want:  "<p>Hello world</p>", // Current implementation returns as-is
+			want:  "Hello world",
 		},
 	}
 
@@ -99,7 +99,7 @@ func TestStripHTML(t *testing.T) {
 func TestVacationCommandExists(t *testing.T) {
 	// Unit tests for the actual API call live in integration; here we just ensure
 	// the command exists and is properly structured. (Compile-time coverage.)
-	_ = newGmailVacationCmd
-	_ = newGmailVacationGetCmd
-	_ = newGmailVacationUpdateCmd
+	_ = GmailVacationCmd{}
+	_ = GmailVacationGetCmd{}
+	_ = GmailVacationUpdateCmd{}
 }

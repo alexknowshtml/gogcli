@@ -10,10 +10,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/steipete/gogcli/internal/outfmt"
-	"github.com/steipete/gogcli/internal/ui"
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/option"
+
+	"github.com/steipete/gogcli/internal/outfmt"
+	"github.com/steipete/gogcli/internal/ui"
 )
 
 func TestDriveLsCmd_TextAndJSON(t *testing.T) {
@@ -23,6 +24,10 @@ func TestDriveLsCmd_TextAndJSON(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet && (r.URL.Path == "/drive/v3/files" || r.URL.Path == "/files"):
+			if errMsg := driveAllDrivesQueryError(r, true); errMsg != "" {
+				http.Error(w, errMsg, http.StatusBadRequest)
+				return
+			}
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"files": []map[string]any{
@@ -32,6 +37,9 @@ func TestDriveLsCmd_TextAndJSON(t *testing.T) {
 						"mimeType":     "application/pdf",
 						"size":         "1024",
 						"modifiedTime": "2025-12-12T14:37:47Z",
+						"owners": []map[string]any{
+							{"emailAddress": "owner@example.com"},
+						},
 					},
 					{
 						"id":           "d1",
@@ -61,7 +69,7 @@ func TestDriveLsCmd_TextAndJSON(t *testing.T) {
 	}
 	newDriveService = func(context.Context, string) (*drive.Service, error) { return svc, nil }
 
-	flags := &rootFlags{Account: "a@b.com"}
+	flags := &RootFlags{Account: "a@b.com"}
 
 	// Text mode: table to stdout + next page hint to stderr.
 	var errBuf bytes.Buffer
@@ -73,18 +81,16 @@ func TestDriveLsCmd_TextAndJSON(t *testing.T) {
 	ctx = outfmt.WithMode(ctx, outfmt.Mode{})
 
 	textOut := captureStdout(t, func() {
-		cmd := newDriveLsCmd(flags)
-		cmd.SetContext(ctx)
-		cmd.SetArgs([]string{})
-		if execErr := cmd.Execute(); execErr != nil {
+		cmd := &DriveLsCmd{}
+		if execErr := runKong(t, cmd, []string{}, ctx, flags); execErr != nil {
 			t.Fatalf("execute: %v", execErr)
 		}
 	})
 
-	if !strings.Contains(textOut, "ID") || !strings.Contains(textOut, "NAME") {
+	if !strings.Contains(textOut, "ID") || !strings.Contains(textOut, "NAME") || !strings.Contains(textOut, "OWNER") {
 		t.Fatalf("unexpected table header: %q", textOut)
 	}
-	if !strings.Contains(textOut, "f1") || !strings.Contains(textOut, "Doc") || !strings.Contains(textOut, "1.0 KB") {
+	if !strings.Contains(textOut, "f1") || !strings.Contains(textOut, "Doc") || !strings.Contains(textOut, "1.0 KB") || !strings.Contains(textOut, "owner@example.com") {
 		t.Fatalf("missing file row: %q", textOut)
 	}
 	if !strings.Contains(textOut, "d1") || !strings.Contains(textOut, "Folder") || !strings.Contains(textOut, "folder") {
@@ -104,10 +110,8 @@ func TestDriveLsCmd_TextAndJSON(t *testing.T) {
 	ctx2 = outfmt.WithMode(ctx2, outfmt.Mode{JSON: true})
 
 	jsonOut := captureStdout(t, func() {
-		cmd := newDriveLsCmd(flags)
-		cmd.SetContext(ctx2)
-		cmd.SetArgs([]string{})
-		if execErr := cmd.Execute(); execErr != nil {
+		cmd := &DriveLsCmd{}
+		if execErr := runKong(t, cmd, []string{}, ctx2, flags); execErr != nil {
 			t.Fatalf("execute: %v", execErr)
 		}
 	})
@@ -136,14 +140,53 @@ func TestDriveLsCmd_TextAndJSON(t *testing.T) {
 	ctx3 = outfmt.WithMode(ctx3, outfmt.Mode{Plain: true})
 
 	plainOut := captureStdout(t, func() {
-		cmd := newDriveLsCmd(flags)
-		cmd.SetContext(ctx3)
-		cmd.SetArgs([]string{})
-		if execErr := cmd.Execute(); execErr != nil {
+		cmd := &DriveLsCmd{}
+		if execErr := runKong(t, cmd, []string{}, ctx3, flags); execErr != nil {
 			t.Fatalf("execute: %v", execErr)
 		}
 	})
-	if !strings.Contains(plainOut, "ID\tNAME\tTYPE\tSIZE\tMODIFIED") {
+	if !strings.Contains(plainOut, "ID\tNAME\tTYPE\tSIZE\tMODIFIED\tOWNER") {
 		t.Fatalf("expected TSV header, got: %q", plainOut)
+	}
+}
+
+func TestDriveLsCmd_NoAllDrives(t *testing.T) {
+	origNew := newDriveService
+	t.Cleanup(func() { newDriveService = origNew })
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.NotFound(w, r)
+			return
+		}
+		if errMsg := driveAllDrivesQueryError(r, false); errMsg != "" {
+			http.Error(w, errMsg, http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"files": []map[string]any{}})
+	}))
+	t.Cleanup(srv.Close)
+
+	svc, err := drive.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(srv.Client()),
+		option.WithEndpoint(srv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	newDriveService = func(context.Context, string) (*drive.Service, error) { return svc, nil }
+
+	flags := &RootFlags{Account: "a@b.com"}
+	u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
+	if uiErr != nil {
+		t.Fatalf("ui.New: %v", uiErr)
+	}
+	ctx := ui.WithUI(context.Background(), u)
+
+	cmd := &DriveLsCmd{}
+	if execErr := runKong(t, cmd, []string{"--no-all-drives"}, ctx, flags); execErr != nil {
+		t.Fatalf("execute: %v", execErr)
 	}
 }

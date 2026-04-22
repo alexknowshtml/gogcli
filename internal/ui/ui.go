@@ -16,6 +16,8 @@ type Options struct {
 	Color  string // auto|always|never
 }
 
+const colorNever = "never"
+
 type UI struct {
 	out *Printer
 	err *Printer
@@ -29,6 +31,7 @@ func New(opts Options) (*UI, error) {
 	if opts.Stdout == nil {
 		opts.Stdout = os.Stdout
 	}
+
 	if opts.Stderr == nil {
 		opts.Stderr = os.Stderr
 	}
@@ -37,7 +40,8 @@ func New(opts Options) (*UI, error) {
 	if colorMode == "" {
 		colorMode = "auto"
 	}
-	if colorMode != "auto" && colorMode != "always" && colorMode != "never" {
+
+	if colorMode != "auto" && colorMode != "always" && colorMode != colorNever {
 		return nil, &ParseError{msg: "invalid --color (expected auto|always|never)"}
 	}
 
@@ -57,8 +61,9 @@ func chooseProfile(detected termenv.Profile, mode string) termenv.Profile {
 	if termenv.EnvNoColor() {
 		return termenv.Ascii
 	}
+
 	switch mode {
-	case "never":
+	case colorNever:
 		return termenv.Ascii
 	case "always":
 		return termenv.TrueColor
@@ -89,11 +94,16 @@ func (p *Printer) printf(format string, args ...any) {
 	p.line(fmt.Sprintf(format, args...))
 }
 
+func (p *Printer) Print(msg string) {
+	_, _ = io.WriteString(p.o, msg)
+}
+
 func (p *Printer) Successf(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	if p.ColorEnabled() {
 		msg = termenv.String(msg).Foreground(p.profile.Color("#22c55e")).String()
 	}
+
 	p.line(msg)
 }
 
@@ -101,6 +111,7 @@ func (p *Printer) Error(msg string) {
 	if p.ColorEnabled() {
 		msg = termenv.String(msg).Foreground(p.profile.Color("#ef4444")).String()
 	}
+
 	p.line(msg)
 }
 
@@ -120,5 +131,6 @@ func FromContext(ctx context.Context) *UI {
 		return nil
 	}
 	u, _ := v.(*UI)
+
 	return u
 }

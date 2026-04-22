@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -252,7 +253,7 @@ func TestExecute_DocsExport_RejectsNonDoc(t *testing.T) {
 	called := false
 	driveExportDownload = func(context.Context, *drive.Service, string, string) (*http.Response, error) {
 		called = true
-		return nil, nil
+		return nil, errors.New("unexpected export call")
 	}
 
 	err = Execute([]string{"--json", "--account", "a@b.com", "docs", "export", "x", "--out", filepath.Join(t.TempDir(), "out")})

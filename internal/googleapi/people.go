@@ -2,6 +2,7 @@ package googleapi
 
 import (
 	"context"
+	"fmt"
 
 	"google.golang.org/api/people/v1"
 )
@@ -13,25 +14,31 @@ const (
 )
 
 func NewPeopleContacts(ctx context.Context, email string) (*people.Service, error) {
-	opts, err := optionsForAccountScopes(ctx, "contacts", email, []string{scopeContactsWrite})
-	if err != nil {
-		return nil, err
+	if opts, err := optionsForAccountScopes(ctx, "contacts", email, []string{scopeContactsWrite}); err != nil {
+		return nil, fmt.Errorf("contacts options: %w", err)
+	} else if svc, err := people.NewService(ctx, opts...); err != nil {
+		return nil, fmt.Errorf("create contacts service: %w", err)
+	} else {
+		return svc, nil
 	}
-	return people.NewService(ctx, opts...)
 }
 
 func NewPeopleOtherContacts(ctx context.Context, email string) (*people.Service, error) {
-	opts, err := optionsForAccountScopes(ctx, "contacts", email, []string{scopeContactsOtherRO})
-	if err != nil {
-		return nil, err
+	if opts, err := optionsForAccountScopes(ctx, "contacts", email, []string{scopeContactsOtherRO}); err != nil {
+		return nil, fmt.Errorf("contacts options: %w", err)
+	} else if svc, err := people.NewService(ctx, opts...); err != nil {
+		return nil, fmt.Errorf("create contacts service: %w", err)
+	} else {
+		return svc, nil
 	}
-	return people.NewService(ctx, opts...)
 }
 
 func NewPeopleDirectory(ctx context.Context, email string) (*people.Service, error) {
-	opts, err := optionsForAccountScopes(ctx, "contacts", email, []string{scopeDirectoryRO})
-	if err != nil {
-		return nil, err
+	if opts, err := optionsForAccountScopes(ctx, "contacts", email, []string{scopeDirectoryRO}); err != nil {
+		return nil, fmt.Errorf("contacts options: %w", err)
+	} else if svc, err := people.NewService(ctx, opts...); err != nil {
+		return nil, fmt.Errorf("create contacts service: %w", err)
+	} else {
+		return svc, nil
 	}
-	return people.NewService(ctx, opts...)
 }

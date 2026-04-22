@@ -2,7 +2,7 @@ package googleapi
 
 import (
 	"context"
-	"log/slog"
+	"fmt"
 
 	"google.golang.org/api/docs/v1"
 
@@ -10,19 +10,11 @@ import (
 )
 
 func NewDocs(ctx context.Context, email string) (*docs.Service, error) {
-	slog.Debug("creating docs service", "email", email)
-
-	opts, err := optionsForAccount(ctx, googleauth.ServiceDocs, email)
-	if err != nil {
-		return nil, err
+	if opts, err := optionsForAccount(ctx, googleauth.ServiceDocs, email); err != nil {
+		return nil, fmt.Errorf("docs options: %w", err)
+	} else if svc, err := docs.NewService(ctx, opts...); err != nil {
+		return nil, fmt.Errorf("create docs service: %w", err)
+	} else {
+		return svc, nil
 	}
-
-	svc, err := docs.NewService(ctx, opts...)
-	if err != nil {
-		slog.Error("failed to create docs service", "email", email, "error", err)
-		return nil, err
-	}
-
-	slog.Debug("docs service created successfully", "email", email)
-	return svc, nil
 }

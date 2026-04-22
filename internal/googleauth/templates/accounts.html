@@ -242,6 +242,8 @@
             gap: 4px;
         }
 
+        /* SYNC: Service tag styles are shared between accounts.html and success.html
+         * If modifying service icons/colors, update both files */
         .service-tag {
             font-size: 10px;
             font-weight: 500;
@@ -268,6 +270,13 @@
             background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' fill='%23EA4335' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.91 1.528-1.145C21.69 2.28 24 3.434 24 5.457z'/%3E%3C/svg%3E");
         }
 
+        .service-tag.chat {
+            color: var(--g-green);
+            background-color: var(--g-green-dim);
+            border-color: rgba(52, 168, 83, 0.2);
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' fill='%2334A853' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z'/%3E%3C/svg%3E");
+        }
+
         .service-tag.drive {
             color: var(--g-yellow);
             background-color: var(--g-yellow-dim);
@@ -287,6 +296,48 @@
             background-color: var(--g-green-dim);
             border-color: rgba(52, 168, 83, 0.2);
             background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' fill='%2334A853' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M11.318 12.545H7.91v-1.909h3.41v1.91zM14.728 0v6h6l-6-6zm1.363 10.636h-3.41v1.91h3.41v-1.91zm0 3.273h-3.41v1.91h3.41v-1.91zM20.727 6.5v15.864c0 .904-.732 1.636-1.636 1.636H4.909a1.636 1.636 0 0 1-1.636-1.636V1.636C3.273.732 4.005 0 4.909 0h9.318v6.5h6.5zm-3.273 2.773H6.545v7.909h10.91v-7.91zm-6.136 4.636H7.91v1.91h3.41v-1.91z'/%3E%3C/svg%3E");
+        }
+
+        .service-tag.people {
+            color: var(--g-blue);
+            background-color: var(--g-blue-dim);
+            border-color: rgba(66, 133, 244, 0.2);
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' fill='%234285F4' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/%3E%3C/svg%3E");
+        }
+
+        .service-tag.tasks {
+            color: var(--g-blue);
+            background-color: var(--g-blue-dim);
+            border-color: rgba(66, 133, 244, 0.2);
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' fill='%234285F4' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M22 5.18L10.59 16.6l-4.24-4.24 1.41-1.41 2.83 2.83 10-10L22 5.18zm-2.21 5.04c.13.57.21 1.17.21 1.78 0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8c1.58 0 3.04.46 4.28 1.25l1.44-1.44A9.9 9.9 0 0012 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10c0-1.19-.22-2.33-.6-3.39l-1.61 1.61z'/%3E%3C/svg%3E");
+        }
+
+        .service-tag.classroom {
+            color: var(--g-green);
+            background-color: var(--g-green-dim);
+            border-color: rgba(52, 168, 83, 0.2);
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' fill='%2334A853' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12 3L1 9l4 2.18v6L12 21l7-3.82v-6l2-1.09V17h2V9L12 3zm6.82 6L12 12.72 5.18 9 12 5.28 18.82 9zM17 15.99l-5 2.73-5-2.73v-3.72L12 15l5-2.73v3.72z'/%3E%3C/svg%3E");
+        }
+
+        .service-tag.groups {
+            color: var(--g-blue);
+            background-color: var(--g-blue-dim);
+            border-color: rgba(66, 133, 244, 0.2);
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' fill='%234285F4' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12 12.75c1.63 0 3.07.39 4.24.9 1.08.48 1.76 1.56 1.76 2.73V18H6v-1.61c0-1.18.68-2.26 1.76-2.73 1.17-.52 2.61-.91 4.24-.91zM4 13c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm1.13 1.1c-.37-.06-.74-.1-1.13-.1-.99 0-1.93.21-2.78.58A2.01 2.01 0 0 0 0 16.43V18h4.5v-1.61c0-.83.23-1.61.63-2.29zM20 13c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm4 3.43c0-.81-.48-1.53-1.22-1.85A6.95 6.95 0 0 0 20 14c-.39 0-.76.04-1.13.1.4.68.63 1.46.63 2.29V18H24v-1.57zM12 6c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3z'/%3E%3C/svg%3E");
+        }
+
+        .service-tag.docs {
+            color: var(--g-blue);
+            background-color: var(--g-blue-dim);
+            border-color: rgba(66, 133, 244, 0.2);
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' fill='%234285F4' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M14.727 0v6h6l-6-6zm1.364 10.636H7.91v1.91h8.181v-1.91zm0 3.273H7.91v1.91h8.181v-1.91zM20.727 6.5v15.864c0 .904-.732 1.636-1.636 1.636H4.909a1.636 1.636 0 0 1-1.636-1.636V1.636C3.273.732 4.005 0 4.909 0h9.318v6.5h6.5zM16.091 7.727H7.91v1.91h8.181v-1.91z'/%3E%3C/svg%3E");
+        }
+
+        .service-tag.keep {
+            color: var(--g-yellow);
+            background-color: var(--g-yellow-dim);
+            border-color: rgba(251, 188, 5, 0.2);
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' fill='%23FBBC05' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12 2C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7zm2 15H10v-1h4v1zm0-2H10v-1h4v1zm-1.5-4.59V13h-1v-2.59L9.67 8.59 10.41 7.85 12 9.44l1.59-1.59.74.74-1.83 1.82z'/%3E%3C/svg%3E");
         }
 
         .account-actions {
@@ -366,6 +417,37 @@
         .remove-btn svg {
             width: 16px;
             height: 16px;
+        }
+
+        .upgrade-btn {
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--g-green);
+            background: var(--g-green-dim);
+            border: 1px solid rgba(52, 168, 83, 0.3);
+            padding: 5px 10px;
+            border-radius: 99px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            opacity: 0;
+            font-family: inherit;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .account-card:hover .upgrade-btn {
+            opacity: 1;
+        }
+
+        .upgrade-btn:hover {
+            background: rgba(52, 168, 83, 0.2);
+            border-color: var(--g-green);
+        }
+
+        .upgrade-btn svg {
+            width: 12px;
+            height: 12px;
         }
 
         /* Add Account Button */
@@ -547,6 +629,40 @@
             opacity: 0.8;
         }
 
+        .github-link {
+            margin-top: 12px;
+        }
+
+        .github-link a {
+            display: inline-flex;
+            align-items: center;
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 12px;
+            transition: color 0.2s;
+        }
+
+        .github-link a:hover {
+            color: var(--g-blue);
+        }
+
+        /* GitHub icon - defined as CSS mask for reuse across templates
+         * SYNC: If modifying the icon, also update success.html */
+        .icon-github {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            vertical-align: middle;
+            margin-right: 4px;
+            background-color: currentColor;
+            -webkit-mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z'/%3E%3C/svg%3E");
+            mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z'/%3E%3C/svg%3E");
+            -webkit-mask-size: contain;
+            mask-size: contain;
+            -webkit-mask-repeat: no-repeat;
+            mask-repeat: no-repeat;
+        }
+
         /* Loading state */
         .spinner {
             width: 16px;
@@ -591,7 +707,7 @@
             <h1>Google Accounts</h1>
             <p class="subtitle">Manage your connected accounts</p>
             <p class="setup-link">
-                <a href="https://github.com/salmonumbrella/gog-cli?tab=readme-ov-file#setup-oauth" target="_blank">
+                <a href="https://github.com/steipete/gogcli#quick-start" target="_blank">
                     First time? Set up Google Cloud credentials →
                 </a>
             </p>
@@ -650,6 +766,12 @@
 
         <footer class="footer">
             <p>You can close this window and return to your terminal.</p>
+            <p class="github-link">
+                <a href="https://github.com/steipete/gogcli" target="_blank">
+                    <span class="icon-github"></span>
+                    View on GitHub
+                </a>
+            </p>
         </footer>
     </div>
 
@@ -700,7 +822,7 @@
                     const services = acc.services || ['calendar', 'gmail', 'drive'];
 
                     return `
-                        <div class="account-card ${isDefault ? 'default' : ''}" data-email="${acc.email}">
+                        <div class="account-card ${isDefault ? 'default' : ''}" data-email="${acc.email}" onclick="upgradePermissions('${acc.email}', event)">
                             <div class="account-avatar" style="background: ${getAvatarGradient(acc.email)}">
                                 ${initial}
                             </div>
@@ -711,6 +833,13 @@
                                 </div>
                             </div>
                             <div class="account-actions">
+                                <button class="upgrade-btn" onclick="upgradePermissions('${acc.email}', event)" title="Add more permissions">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                                        <line x1="12" y1="5" x2="12" y2="19"/>
+                                        <line x1="5" y1="12" x2="19" y2="12"/>
+                                    </svg>
+                                    Permissions
+                                </button>
                                 ${isDefault ? `
                                     <span class="default-badge">
                                         <svg viewBox="0 0 24 24" fill="currentColor">
@@ -719,9 +848,9 @@
                                         Default
                                     </span>
                                 ` : `
-                                    <button class="set-default-btn" onclick="setDefault('${acc.email}')">Set default</button>
+                                    <button class="set-default-btn" onclick="event.stopPropagation(); setDefault('${acc.email}')">Set default</button>
                                 `}
-                                <button class="remove-btn" onclick="removeAccount('${acc.email}')" title="Remove account">
+                                <button class="remove-btn" onclick="event.stopPropagation(); removeAccount('${acc.email}')" title="Remove account">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                                         <line x1="18" y1="6" x2="6" y2="18"/>
                                         <line x1="6" y1="6" x2="18" y2="18"/>
@@ -737,6 +866,12 @@
         function addAccount() {
             // Redirect to OAuth flow
             window.location.href = '/auth/start';
+        }
+
+        function upgradePermissions(email, event) {
+            event.stopPropagation();
+            // Redirect to OAuth flow with force consent to get all permissions
+            window.location.href = '/auth/upgrade?email=' + encodeURIComponent(email);
         }
 
         async function setDefault(email) {

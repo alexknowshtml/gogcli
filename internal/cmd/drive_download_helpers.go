@@ -7,8 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/steipete/gogcli/internal/config"
 	"google.golang.org/api/drive/v3"
+
+	"github.com/steipete/gogcli/internal/config"
 )
 
 func resolveDriveDownloadDestPath(meta *drive.File, outPathFlag string) (string, error) {
@@ -23,6 +24,14 @@ func resolveDriveDownloadDestPath(meta *drive.File, outPathFlag string) (string,
 	}
 
 	destPath := strings.TrimSpace(outPathFlag)
+	// Expand ~ to home directory (shell doesn't expand when path is quoted).
+	if destPath != "" {
+		expanded, err := config.ExpandPath(destPath)
+		if err != nil {
+			return "", err
+		}
+		destPath = expanded
+	}
 	// Sanitize filename to prevent path traversal.
 	safeName := filepath.Base(meta.Name)
 	if safeName == "" || safeName == "." || safeName == ".." {

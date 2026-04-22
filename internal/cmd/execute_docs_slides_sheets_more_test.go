@@ -10,15 +10,18 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"google.golang.org/api/docs/v1"
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/option"
 )
 
 func TestExecute_DocsSlidesSheets_CopyCreateInfoCat_JSON(t *testing.T) {
 	origNew := newDriveService
+	origDocs := newDocsService
 	origExport := driveExportDownload
 	t.Cleanup(func() {
 		newDriveService = origNew
+		newDocsService = origDocs
 		driveExportDownload = origExport
 	})
 
@@ -28,8 +31,32 @@ func TestExecute_DocsSlidesSheets_CopyCreateInfoCat_JSON(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
+		drivePath := strings.TrimPrefix(path, "/drive/v3")
 		switch {
-		case r.Method == http.MethodGet && strings.Contains(path, "/files/d1") && !strings.HasSuffix(path, "/copy"):
+		case r.Method == http.MethodGet && strings.HasPrefix(path, "/v1/documents/"):
+			id := strings.TrimPrefix(path, "/v1/documents/")
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"documentId": id,
+				"title":      "Doc 1",
+				"body": map[string]any{
+					"content": []any{
+						map[string]any{
+							"paragraph": map[string]any{
+								"elements": []any{
+									map[string]any{
+										"textRun": map[string]any{
+											"content": "hello",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			})
+			return
+		case r.Method == http.MethodGet && strings.Contains(drivePath, "/files/d1") && !strings.HasSuffix(drivePath, "/copy"):
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"id":       "d1",
@@ -37,7 +64,7 @@ func TestExecute_DocsSlidesSheets_CopyCreateInfoCat_JSON(t *testing.T) {
 				"mimeType": "application/vnd.google-apps.document",
 			})
 			return
-		case r.Method == http.MethodGet && strings.Contains(path, "/files/p1") && !strings.HasSuffix(path, "/copy"):
+		case r.Method == http.MethodGet && strings.Contains(drivePath, "/files/p1") && !strings.HasSuffix(drivePath, "/copy"):
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"id":       "p1",
@@ -45,7 +72,7 @@ func TestExecute_DocsSlidesSheets_CopyCreateInfoCat_JSON(t *testing.T) {
 				"mimeType": "application/vnd.google-apps.presentation",
 			})
 			return
-		case r.Method == http.MethodGet && strings.Contains(path, "/files/s1") && !strings.HasSuffix(path, "/copy"):
+		case r.Method == http.MethodGet && strings.Contains(drivePath, "/files/s1") && !strings.HasSuffix(drivePath, "/copy"):
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"id":       "s1",
@@ -53,16 +80,16 @@ func TestExecute_DocsSlidesSheets_CopyCreateInfoCat_JSON(t *testing.T) {
 				"mimeType": "application/vnd.google-apps.spreadsheet",
 			})
 			return
-		case r.Method == http.MethodPost && strings.HasSuffix(path, "/copy"):
+		case r.Method == http.MethodPost && strings.HasSuffix(drivePath, "/copy"):
 			atomic.AddInt32(&copyCalls, 1)
 			w.Header().Set("Content-Type", "application/json")
 			id := "copy-unknown"
 			switch {
-			case strings.Contains(path, "/files/d1/copy"):
+			case strings.Contains(drivePath, "/files/d1/copy"):
 				id = "d1-copy"
-			case strings.Contains(path, "/files/p1/copy"):
+			case strings.Contains(drivePath, "/files/p1/copy"):
 				id = "p1-copy"
-			case strings.Contains(path, "/files/s1/copy"):
+			case strings.Contains(drivePath, "/files/s1/copy"):
 				id = "s1-copy"
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{
@@ -73,7 +100,7 @@ func TestExecute_DocsSlidesSheets_CopyCreateInfoCat_JSON(t *testing.T) {
 				"modifiedTime": "2025-12-26T00:00:00Z",
 			})
 			return
-		case r.Method == http.MethodPost && (strings.HasSuffix(path, "/files") || strings.HasSuffix(path, "/drive/v3/files")):
+		case r.Method == http.MethodPost && (strings.HasSuffix(drivePath, "/files")):
 			atomic.AddInt32(&createCalls, 1)
 			var req map[string]any
 			_ = json.NewDecoder(r.Body).Decode(&req)
@@ -110,6 +137,16 @@ func TestExecute_DocsSlidesSheets_CopyCreateInfoCat_JSON(t *testing.T) {
 		t.Fatalf("NewService: %v", err)
 	}
 	newDriveService = func(context.Context, string) (*drive.Service, error) { return svc, nil }
+
+	docSvc, err := docs.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(srv.Client()),
+		option.WithEndpoint(srv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewDocsService: %v", err)
+	}
+	newDocsService = func(context.Context, string) (*docs.Service, error) { return docSvc, nil }
 
 	driveExportDownload = func(context.Context, *drive.Service, string, string) (*http.Response, error) {
 		atomic.AddInt32(&exportCalls, 1)
@@ -156,29 +193,21 @@ func TestExecute_DocsSlidesSheets_CopyCreateInfoCat_JSON(t *testing.T) {
 	if atomic.LoadInt32(&copyCalls) < 4 {
 		t.Fatalf("copyCalls=%d", copyCalls)
 	}
-	if atomic.LoadInt32(&exportCalls) != 1 {
+	if atomic.LoadInt32(&exportCalls) != 0 {
 		t.Fatalf("exportCalls=%d", exportCalls)
 	}
 }
 
 func TestExecute_DocsCat_WrongMime(t *testing.T) {
-	origNew := newDriveService
-	t.Cleanup(func() { newDriveService = origNew })
+	origDocs := newDocsService
+	t.Cleanup(func() { newDocsService = origDocs })
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.NotFound(w, r)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"id":       "x1",
-			"mimeType": "application/pdf",
-		})
+		http.NotFound(w, r)
 	}))
 	defer srv.Close()
 
-	svc, err := drive.NewService(context.Background(),
+	docSvc, err := docs.NewService(context.Background(),
 		option.WithoutAuthentication(),
 		option.WithHTTPClient(srv.Client()),
 		option.WithEndpoint(srv.URL+"/"),
@@ -186,10 +215,10 @@ func TestExecute_DocsCat_WrongMime(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewService: %v", err)
 	}
-	newDriveService = func(context.Context, string) (*drive.Service, error) { return svc, nil }
+	newDocsService = func(context.Context, string) (*docs.Service, error) { return docSvc, nil }
 
 	err = Execute([]string{"--account", "a@b.com", "docs", "cat", "x1"})
-	if err == nil || !strings.Contains(err.Error(), "not a Google Doc") {
-		t.Fatalf("expected not a Google Doc error, got: %v", err)
+	if err == nil {
+		t.Fatal("expected error, got nil")
 	}
 }

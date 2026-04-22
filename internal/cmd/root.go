@@ -1,171 +1,290 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"strings"
 
-	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
+	"github.com/alecthomas/kong"
+	"golang.org/x/term"
+
+	"github.com/steipete/gogcli/internal/authclient"
+	"github.com/steipete/gogcli/internal/config"
 	"github.com/steipete/gogcli/internal/errfmt"
+	"github.com/steipete/gogcli/internal/googleauth"
 	"github.com/steipete/gogcli/internal/outfmt"
+	"github.com/steipete/gogcli/internal/secrets"
 	"github.com/steipete/gogcli/internal/ui"
 )
 
-type rootFlags struct {
-	Color   string
-	Account string
-	JSON    bool
-	Plain   bool
-	Force   bool
-	NoInput bool
-	Verbose bool
+const (
+	colorAuto  = "auto"
+	colorNever = "never"
+	boolTrue   = "true"
+	boolFalse  = "false"
+)
+
+type RootFlags struct {
+	Color           string `help:"Color output: auto|always|never" default:"${color}"`
+	Account         string `help:"Account email for API commands (gmail/calendar/chat/classroom/drive/docs/slides/contacts/tasks/people/sheets/forms/appscript/ads)" aliases:"acct" short:"a"`
+	Client          string `help:"OAuth client name (selects stored credentials + token bucket)" default:"${client}"`
+	AccessToken     string `help:"Use provided access token directly (bypasses stored refresh tokens; token expires in ~1h)" env:"GOG_ACCESS_TOKEN"`
+	EnableCommands  string `help:"Comma-separated list of enabled commands; dot paths allowed (restricts CLI)" default:"${enabled_commands}"`
+	DisableCommands string `help:"Comma-separated list of disabled commands; dot paths allowed" default:"${disabled_commands}"`
+	GmailNoSend     bool   `help:"Block Gmail send operations (agent safety)" default:"${gmail_no_send}"`
+	JSON            bool   `help:"Output JSON to stdout (best for scripting)" default:"${json}" aliases:"machine" short:"j"`
+	Plain           bool   `help:"Output stable, parseable text to stdout (TSV; no colors)" default:"${plain}" aliases:"tsv" short:"p"`
+	ResultsOnly     bool   `name:"results-only" help:"In JSON mode, emit only the primary result (drops envelope fields like nextPageToken)"`
+	Select          string `name:"select" aliases:"pick,project" help:"In JSON mode, select comma-separated fields (best-effort; supports dot paths). Desire path: use --fields for most commands."`
+	DryRun          bool   `help:"Do not make changes; print intended actions and exit successfully" aliases:"noop,preview,dryrun" short:"n"`
+	Force           bool   `help:"Skip confirmations for destructive commands" aliases:"yes,assume-yes" short:"y"`
+	NoInput         bool   `help:"Never prompt; fail instead (useful for CI)" aliases:"non-interactive,noninteractive"`
+	Verbose         bool   `help:"Enable verbose logging" short:"v"`
 }
 
-func Execute(args []string) error {
-	flags := rootFlags{Color: envOr("GOG_COLOR", "auto")}
-	envMode := outfmt.FromEnv()
-	flags.JSON = envMode.JSON
-	flags.Plain = envMode.Plain
+type CLI struct {
+	RootFlags `embed:""`
 
-	// Avoid dangerous prefix-matching for commands (future-proofing).
-	cobra.EnablePrefixMatching = false
+	Version kong.VersionFlag `help:"Print version and exit"`
 
-	if hasExactArg(args, "--version") {
-		fmt.Fprintln(os.Stdout, VersionString())
-		return nil
+	// Action-first desire paths (agent-friendly shortcuts).
+	Send     GmailSendCmd     `cmd:"" name:"send" help:"Send an email (alias for 'gmail send')"`
+	Ls       DriveLsCmd       `cmd:"" name:"ls" aliases:"list" help:"List Drive files (alias for 'drive ls')"`
+	Search   DriveSearchCmd   `cmd:"" name:"search" aliases:"find" help:"Search Drive files (alias for 'drive search')"`
+	Open     OpenCmd          `cmd:"" name:"open" aliases:"browse" help:"Print a best-effort web URL for a Google URL/ID (offline)"`
+	Download DriveDownloadCmd `cmd:"" name:"download" aliases:"dl" help:"Download a Drive file (alias for 'drive download')"`
+	Upload   DriveUploadCmd   `cmd:"" name:"upload" aliases:"up,put" help:"Upload a file to Drive (alias for 'drive upload')"`
+	Login    AuthAddCmd       `cmd:"" name:"login" help:"Authorize and store a refresh token (alias for 'auth add')"`
+	Logout   AuthRemoveCmd    `cmd:"" name:"logout" help:"Remove a stored refresh token (alias for 'auth remove')"`
+	Status   AuthStatusCmd    `cmd:"" name:"status" aliases:"st" help:"Show auth/config status (alias for 'auth status')"`
+	Me       PeopleMeCmd      `cmd:"" name:"me" help:"Show your profile (alias for 'people me')"`
+	Whoami   PeopleMeCmd      `cmd:"" name:"whoami" aliases:"who-am-i" help:"Show your profile (alias for 'people me')"`
+
+	Auth       AuthCmd               `cmd:"" help:"Auth and credentials"`
+	Groups     GroupsCmd             `cmd:"" aliases:"group" help:"Google Groups"`
+	Admin      AdminCmd              `cmd:"" help:"Google Workspace Admin (Directory API) - requires domain-wide delegation"`
+	Drive      DriveCmd              `cmd:"" aliases:"drv" help:"Google Drive"`
+	Docs       DocsCmd               `cmd:"" aliases:"doc" help:"Google Docs (export via Drive)"`
+	Slides     SlidesCmd             `cmd:"" aliases:"slide" help:"Google Slides"`
+	Calendar   CalendarCmd           `cmd:"" aliases:"cal" help:"Google Calendar"`
+	Classroom  ClassroomCmd          `cmd:"" aliases:"class" help:"Google Classroom"`
+	Time       TimeCmd               `cmd:"" help:"Local time utilities"`
+	Gmail      GmailCmd              `cmd:"" aliases:"mail,email" help:"Gmail"`
+	Chat       ChatCmd               `cmd:"" help:"Google Chat"`
+	Contacts   ContactsCmd           `cmd:"" aliases:"contact" help:"Google Contacts"`
+	Tasks      TasksCmd              `cmd:"" aliases:"task" help:"Google Tasks"`
+	People     PeopleCmd             `cmd:"" aliases:"person" help:"Google People"`
+	Keep       KeepCmd               `cmd:"" help:"Google Keep (Workspace only)"`
+	Sheets     SheetsCmd             `cmd:"" aliases:"sheet" help:"Google Sheets"`
+	Forms      FormsCmd              `cmd:"" aliases:"form" help:"Google Forms"`
+	AppScript  AppScriptCmd          `cmd:"" name:"appscript" aliases:"script,apps-script" help:"Google Apps Script"`
+	Config     ConfigCmd             `cmd:"" help:"Manage configuration"`
+	ExitCodes  AgentExitCodesCmd     `cmd:"" name:"exit-codes" aliases:"exitcodes" help:"Print stable exit codes (alias for 'agent exit-codes')"`
+	Agent      AgentCmd              `cmd:"" help:"Agent-friendly helpers"`
+	Schema     SchemaCmd             `cmd:"" help:"Machine-readable command/flag schema" aliases:"help-json,helpjson"`
+	VersionCmd VersionCmd            `cmd:"" name:"version" help:"Print version"`
+	Completion CompletionCmd         `cmd:"" help:"Generate shell completion scripts"`
+	Complete   CompletionInternalCmd `cmd:"" name:"__complete" hidden:"" help:"Internal completion helper"`
+}
+
+type exitPanic struct{ code int }
+
+func Execute(args []string) (err error) {
+	if len(args) == 0 {
+		args = []string{"--help"}
+	}
+	args = rewriteDesirePathArgs(args)
+
+	parser, cli, err := newParser(helpDescription())
+	if err != nil {
+		return err
 	}
 
-	root := &cobra.Command{
-		Use:           "gog",
-		Short:         "Google CLI for Gmail/Calendar/Drive/Contacts/Tasks/Sheets/Docs/Slides/People",
-		SilenceUsage:  true,
-		SilenceErrors: true,
-		CompletionOptions: cobra.CompletionOptions{
-			DisableDefaultCmd: true,
-		},
-		Example: strings.TrimSpace(`
-  # One-time setup (OAuth)
-  gog auth credentials ~/path/to/credentials.json
-  gog auth add you@gmail.com
-
-  # Avoid repeating --account
-  export GOG_ACCOUNT=you@gmail.com
-
-	  # Gmail
-	  gog gmail search 'newer_than:7d' --max 10
-	  gog gmail thread <threadId>
-	  gog gmail get <messageId> --format metadata
-	  gog gmail attachment <messageId> <attachmentId> --out ./attachment.bin
-	  gog gmail labels get INBOX --json
-
-	  # Calendar
-	  gog calendar calendars
-	  gog calendar events <calendarId> --from 2025-01-01T00:00:00Z --to 2025-01-08T00:00:00Z --max 50
-	  gog calendar respond <calendarId> <eventId> --status accepted
-
-  # Contacts
-  gog contacts list --max 50
-  gog contacts search "Ada" --max 50
-  gog contacts other list --max 50
-
-  # Tasks
-  gog tasks lists --max 50
-  gog tasks list <tasklistId> --max 50
-
-	  # People
-	  gog people me
-
-	  # Sheets
-	  gog sheets get <spreadsheetId> 'Sheet1!A1:C10'
-
-	  # Exports
-	  gog sheets export <spreadsheetId> --format pdf
-	  gog docs export <docId> --format docx
-	  gog slides export <presentationId> --format pptx
-
-	  # Parseable output
-	  gog --json drive ls --max 5 | jq .
-	`),
-		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
-			logLevel := slog.LevelWarn
-			if flags.Verbose {
-				logLevel = slog.LevelDebug
+	defer func() {
+		if r := recover(); r != nil {
+			if ep, ok := r.(exitPanic); ok {
+				if ep.code == 0 {
+					err = nil
+					return
+				}
+				err = &ExitError{Code: ep.code, Err: errors.New("exited")}
+				return
 			}
-			slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-				Level: logLevel,
-			})))
+			panic(r)
+		}
+	}()
 
-			mode, err := outfmt.FromFlags(flags.JSON, flags.Plain)
-			if err != nil {
-				return err
-			}
-			cmd.SetContext(outfmt.WithMode(cmd.Context(), mode))
-
-			u, err := ui.New(ui.Options{
-				Stdout: os.Stdout,
-				Stderr: os.Stderr,
-				Color: func() string {
-					if outfmt.IsJSON(cmd.Context()) || outfmt.IsPlain(cmd.Context()) {
-						return "never"
-					}
-					return flags.Color
-				}(),
-			})
-			if err != nil {
-				return err
-			}
-			cmd.SetContext(ui.WithUI(cmd.Context(), u))
-			return nil
-		},
+	kctx, err := parser.Parse(args)
+	if err != nil {
+		parsedErr := wrapParseError(err)
+		_, _ = fmt.Fprintln(os.Stderr, errfmt.Format(parsedErr))
+		return parsedErr
 	}
 
-	root.SetArgs(args)
-	root.PersistentFlags().StringVar(&flags.Color, "color", flags.Color, "Color output: auto|always|never")
-	root.PersistentFlags().StringVar(&flags.Account, "account", "", "Account email for API commands (gmail/calendar/drive/docs/slides/contacts/tasks/people/sheets)")
-	root.PersistentFlags().BoolVar(&flags.JSON, "json", flags.JSON, "Output JSON to stdout (best for scripting)")
-	root.PersistentFlags().BoolVar(&flags.Plain, "plain", flags.Plain, "Output stable, parseable text to stdout (TSV; no colors)")
-	root.PersistentFlags().BoolVar(&flags.Force, "force", false, "Skip confirmations for destructive commands")
-	root.PersistentFlags().BoolVar(&flags.NoInput, "no-input", false, "Never prompt; fail instead (useful for CI)")
-	root.PersistentFlags().BoolVar(&flags.Verbose, "verbose", false, "Enable verbose logging")
+	if err = enforceEnabledCommands(kctx, cli.EnableCommands); err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, errfmt.Format(err))
+		return err
+	}
+	if err = enforceDisabledCommands(kctx, cli.DisableCommands); err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, errfmt.Format(err))
+		return err
+	}
+	if err = enforceGmailNoSend(kctx, &cli.RootFlags); err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, errfmt.Format(err))
+		return err
+	}
 
-	root.AddCommand(newAuthCmd(&flags))
-	root.AddCommand(newDriveCmd(&flags))
-	root.AddCommand(newDocsCmd(&flags))
-	root.AddCommand(newSlidesCmd(&flags))
-	root.AddCommand(newCalendarCmd(&flags))
-	root.AddCommand(newGmailCmd(&flags))
-	root.AddCommand(newContactsCmd(&flags))
-	root.AddCommand(newTasksCmd(&flags))
-	root.AddCommand(newPeopleCmd(&flags))
-	root.AddCommand(newSheetsCmd(&flags))
-	root.AddCommand(newVersionCmd())
+	logLevel := slog.LevelWarn
+	if cli.Verbose {
+		logLevel = slog.LevelDebug
+	}
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+		Level: logLevel,
+	})))
 
-	root.SetFlagErrorFunc(func(cmd *cobra.Command, err error) error {
-		// pflag already includes helpful context ("unknown flag", "invalid argument", ...).
+	// Opt-in "agent mode": default to JSON when stdout is piped/non-TTY.
+	// We intentionally do this after parsing so `--plain` can override it.
+	if envBool("GOG_AUTO_JSON") && !cli.JSON && !cli.Plain && !term.IsTerminal(int(os.Stdout.Fd())) { //nolint:gosec // os file descriptor fits int on supported targets
+		cli.JSON = true
+	}
+
+	mode, err := outfmt.FromFlags(cli.JSON, cli.Plain)
+	if err != nil {
 		return newUsageError(err)
-	})
-	root.AddCommand(newCompletionCmd())
+	}
 
-	err := root.Execute()
+	ctx := context.Background()
+	ctx = outfmt.WithMode(ctx, mode)
+	ctx = outfmt.WithJSONTransform(ctx, outfmt.JSONTransform{
+		ResultsOnly: cli.ResultsOnly,
+		Select:      splitCommaList(cli.Select),
+	})
+	ctx = authclient.WithClient(ctx, cli.Client)
+	ctx = authclient.WithAccessToken(ctx, directAccessToken(&cli.RootFlags))
+
+	uiColor := cli.Color
+	if outfmt.IsJSON(ctx) || outfmt.IsPlain(ctx) {
+		uiColor = colorNever
+	}
+
+	u, err := ui.New(ui.Options{
+		Stdout: os.Stdout,
+		Stderr: os.Stderr,
+		Color:  uiColor,
+	})
+	if err != nil {
+		return err
+	}
+	ctx = ui.WithUI(ctx, u)
+
+	kctx.BindTo(ctx, (*context.Context)(nil))
+	kctx.Bind(&cli.RootFlags)
+
+	err = kctx.Run()
 	if err == nil {
 		return nil
 	}
-	if errors.Is(err, pflag.ErrHelp) {
+	// Some commands intentionally exit early with success.
+	if ExitCode(err) == 0 {
 		return nil
 	}
+	err = stableExitCode(err)
 
-	if ExitCode(err) == 1 && isUsageError(err) {
-		err = &ExitError{Code: 2, Err: err}
-	}
-
-	if u := ui.FromContext(root.Context()); u != nil {
-		u.Err().Error(errfmt.Format(err))
+	if u := ui.FromContext(ctx); u != nil {
+		msg := strings.TrimSpace(errfmt.Format(err))
+		if msg != "" {
+			u.Err().Error(msg)
+		}
 		return err
 	}
-	_, _ = fmt.Fprintln(os.Stderr, errfmt.Format(err))
+	msg := strings.TrimSpace(errfmt.Format(err))
+	if msg != "" {
+		_, _ = fmt.Fprintln(os.Stderr, msg)
+	}
+	return err
+}
+
+func rewriteDesirePathArgs(args []string) []string {
+	// `--fields` is already used by `calendar events` for the Calendar API `fields` parameter.
+	// Agents frequently guess `--fields` to mean "select output fields", so we squat it
+	// everywhere else by rewriting to the global `--select` flag.
+	//
+	// We avoid adding `--fields` as a real alias because Kong would treat it as a duplicate flag.
+	keepFields := isCalendarEventsCommand(args)
+
+	out := make([]string, 0, len(args))
+	for i, a := range args {
+		if a == "--" {
+			out = append(out, args[i:]...)
+			break
+		}
+		if keepFields {
+			out = append(out, a)
+			continue
+		}
+		if a == "--fields" {
+			out = append(out, "--select")
+			continue
+		}
+		if strings.HasPrefix(a, "--fields=") {
+			out = append(out, "--select="+strings.TrimPrefix(a, "--fields="))
+			continue
+		}
+		out = append(out, a)
+	}
+	return out
+}
+
+func isCalendarEventsCommand(args []string) bool {
+	cmdTokens := make([]string, 0, 2)
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if a == "--" {
+			break
+		}
+		if strings.HasPrefix(a, "-") {
+			if globalFlagTakesValue(a) && i+1 < len(args) {
+				i++
+			}
+			continue
+		}
+		cmdTokens = append(cmdTokens, a)
+		if len(cmdTokens) >= 2 {
+			break
+		}
+	}
+
+	if len(cmdTokens) < 2 {
+		return false
+	}
+	cmd0 := strings.TrimSpace(strings.ToLower(cmdTokens[0]))
+	cmd1 := strings.TrimSpace(strings.ToLower(cmdTokens[1]))
+	if cmd0 != "calendar" && cmd0 != "cal" {
+		return false
+	}
+	return cmd1 == "events" || cmd1 == "ls" || cmd1 == "list"
+}
+
+func globalFlagTakesValue(flag string) bool {
+	switch flag {
+	case "--color", "--account", "--acct", "--client", "--enable-commands", "--disable-commands", "--select", "--pick", "--project", "-a":
+		return true
+	default:
+		return false
+	}
+}
+
+func wrapParseError(err error) error {
+	if err == nil {
+		return nil
+	}
+	var parseErr *kong.ParseError
+	if errors.As(err, &parseErr) {
+		return &ExitError{Code: 2, Err: parseErr}
+	}
 	return err
 }
 
@@ -176,13 +295,79 @@ func envOr(key, fallback string) string {
 	return fallback
 }
 
-func hasExactArg(args []string, target string) bool {
-	for _, a := range args {
-		if a == target {
-			return true
-		}
+func envBool(key string) bool {
+	v := strings.TrimSpace(strings.ToLower(os.Getenv(key)))
+	switch v {
+	case "1", boolTrue, "yes", "y", "on":
+		return true
+	default:
+		return false
 	}
-	return false
+}
+
+func boolString(v bool) string {
+	if v {
+		return boolTrue
+	}
+	return boolFalse
+}
+
+func newParser(description string) (*kong.Kong, *CLI, error) {
+	envMode := outfmt.FromEnv()
+	vars := kong.Vars{
+		"auth_services":     googleauth.UserServiceCSV(),
+		"color":             envOr("GOG_COLOR", "auto"),
+		"calendar_weekday":  envOr("GOG_CALENDAR_WEEKDAY", "false"),
+		"client":            envOr("GOG_CLIENT", ""),
+		"disabled_commands": envOr("GOG_DISABLE_COMMANDS", ""),
+		"enabled_commands":  envOr("GOG_ENABLE_COMMANDS", ""),
+		"gmail_no_send":     boolString(envBool("GOG_GMAIL_NO_SEND")),
+		"json":              boolString(envMode.JSON),
+		"plain":             boolString(envMode.Plain),
+		"version":           VersionString(),
+	}
+
+	cli := &CLI{}
+	parser, err := kong.New(
+		cli,
+		kong.Name("gog"),
+		kong.Description(description),
+		kong.ConfigureHelp(helpOptions()),
+		kong.Help(helpPrinter),
+		kong.Vars(vars),
+		kong.Writers(os.Stdout, os.Stderr),
+		kong.Exit(func(code int) { panic(exitPanic{code: code}) }),
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+	return parser, cli, nil
+}
+
+func baseDescription() string {
+	return "Google CLI for Gmail/Calendar/Chat/Classroom/Drive/Contacts/Tasks/Sheets/Docs/Slides/People/Forms/App Script/Ads/Groups/Admin/Keep"
+}
+
+func helpDescription() string {
+	desc := baseDescription()
+
+	configPath, err := config.ConfigPath()
+	configLine := "unknown"
+	if err != nil {
+		configLine = fmt.Sprintf("error: %v", err)
+	} else if configPath != "" {
+		configLine = configPath
+	}
+
+	backendInfo, err := secrets.ResolveKeyringBackendInfo()
+	var backendLine string
+	if err != nil {
+		backendLine = fmt.Sprintf("error: %v", err)
+	} else if backendInfo.Value != "" {
+		backendLine = fmt.Sprintf("%s (source: %s)", backendInfo.Value, backendInfo.Source)
+	}
+
+	return fmt.Sprintf("%s\n\nConfig:\n  file: %s\n  keyring backend: %s", desc, configLine, backendLine)
 }
 
 // newUsageError wraps errors in a way main() can map to exit code 2.
@@ -190,32 +375,5 @@ func newUsageError(err error) error {
 	if err == nil {
 		return nil
 	}
-	// Preserve pflag.ErrHelp (should not be treated as failure).
-	if errors.Is(err, pflag.ErrHelp) {
-		return err
-	}
 	return &ExitError{Code: 2, Err: err}
-}
-
-func isUsageError(err error) bool {
-	var outErr *outfmt.ParseError
-	if errors.As(err, &outErr) {
-		return true
-	}
-	var uiErr *ui.ParseError
-	if errors.As(err, &uiErr) {
-		return true
-	}
-	msg := strings.TrimSpace(err.Error())
-	switch {
-	case strings.HasPrefix(msg, "accepts "),
-		strings.HasPrefix(msg, "requires "),
-		strings.HasPrefix(msg, "unknown command"),
-		strings.HasPrefix(msg, "invalid argument"),
-		strings.HasPrefix(msg, "unknown flag"),
-		strings.HasPrefix(msg, "unknown shorthand flag"):
-		return true
-	default:
-		return false
-	}
 }

@@ -1,260 +1,48 @@
 package cmd
 
-import (
-	"context"
-	"fmt"
-	"net/mail"
-	"os"
-	"strings"
-	"sync"
-	"time"
-
-	"github.com/spf13/cobra"
-	"github.com/steipete/gogcli/internal/googleapi"
-	"github.com/steipete/gogcli/internal/outfmt"
-	"github.com/steipete/gogcli/internal/ui"
-	"google.golang.org/api/gmail/v1"
-)
+import "github.com/steipete/gogcli/internal/googleapi"
 
 var newGmailService = googleapi.NewGmail
 
-func newGmailCmd(flags *rootFlags) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "gmail",
-		Short: "Gmail",
-	}
-	cmd.AddCommand(newGmailSearchCmd(flags))
-	cmd.AddCommand(newGmailThreadCmd(flags))
-	cmd.AddCommand(newGmailGetCmd(flags))
-	cmd.AddCommand(newGmailAttachmentCmd(flags))
-	cmd.AddCommand(newGmailURLCmd(flags))
-	cmd.AddCommand(newGmailLabelsCmd(flags))
-	cmd.AddCommand(newGmailSendCmd(flags))
-	cmd.AddCommand(newGmailDraftsCmd(flags))
-	cmd.AddCommand(newGmailWatchCmd(flags))
-	cmd.AddCommand(newGmailHistoryCmd(flags))
-	cmd.AddCommand(newGmailAutoForwardCmd(flags))
-	cmd.AddCommand(newGmailBatchCmd(flags))
-	cmd.AddCommand(newGmailDelegatesCmd(flags))
-	cmd.AddCommand(newGmailFiltersCmd(flags))
-	cmd.AddCommand(newGmailForwardingCmd(flags))
-	cmd.AddCommand(newGmailSendAsCmd(flags))
-	cmd.AddCommand(newGmailVacationCmd(flags))
-	return cmd
+type GmailCmd struct {
+	Search     GmailSearchCmd     `cmd:"" name:"search" aliases:"find,query,ls,list" group:"Read" help:"Search threads using Gmail query syntax"`
+	Messages   GmailMessagesCmd   `cmd:"" name:"messages" aliases:"message,msg,msgs" group:"Read" help:"Message operations"`
+	Thread     GmailThreadCmd     `cmd:"" name:"thread" aliases:"threads,read" group:"Organize" help:"Thread operations (get, modify)"`
+	Get        GmailGetCmd        `cmd:"" name:"get" aliases:"info,show" group:"Read" help:"Get a message (full|metadata|raw)"`
+	Attachment GmailAttachmentCmd `cmd:"" name:"attachment" group:"Read" help:"Download a single attachment"`
+	URL        GmailURLCmd        `cmd:"" name:"url" group:"Read" help:"Print Gmail web URLs for threads"`
+	History    GmailHistoryCmd    `cmd:"" name:"history" group:"Read" help:"Gmail history"`
+
+	Labels  GmailLabelsCmd   `cmd:"" name:"labels" aliases:"label" group:"Organize" help:"Label operations"`
+	Batch   GmailBatchCmd    `cmd:"" name:"batch" group:"Organize" help:"Batch operations"`
+	Archive GmailArchiveCmd  `cmd:"" name:"archive" group:"Organize" help:"Archive messages (remove from inbox)"`
+	Read    GmailReadCmd     `cmd:"" name:"mark-read" aliases:"read-messages" group:"Organize" help:"Mark messages as read"`
+	Unread  GmailUnreadCmd   `cmd:"" name:"unread" aliases:"mark-unread" group:"Organize" help:"Mark messages as unread"`
+	Trash   GmailTrashMsgCmd `cmd:"" name:"trash" group:"Organize" help:"Move messages to trash"`
+
+	Send      GmailSendCmd      `cmd:"" name:"send" group:"Write" help:"Send an email"`
+	Forward   GmailForwardCmd   `cmd:"" name:"forward" aliases:"fwd" group:"Write" help:"Forward a message to new recipients"`
+	AutoReply GmailAutoReplyCmd `cmd:"" name:"autoreply" group:"Write" help:"Reply once to matching messages"`
+	Track     GmailTrackCmd     `cmd:"" name:"track" group:"Write" help:"Email open tracking"`
+	Drafts    GmailDraftsCmd    `cmd:"" name:"drafts" aliases:"draft" group:"Write" help:"Draft operations"`
+
+	Settings GmailSettingsCmd `cmd:"" name:"settings" group:"Admin" help:"Settings and admin"`
+
+	Watch       GmailWatchCmd       `cmd:"" name:"watch" hidden:"" help:"Manage Gmail watch"`
+	AutoForward GmailAutoForwardCmd `cmd:"" name:"autoforward" hidden:"" help:"Auto-forwarding settings"`
+	Delegates   GmailDelegatesCmd   `cmd:"" name:"delegates" hidden:"" help:"Delegate operations"`
+	Filters     GmailFiltersCmd     `cmd:"" name:"filters" hidden:"" help:"Filter operations"`
+	Forwarding  GmailForwardingCmd  `cmd:"" name:"forwarding" hidden:"" help:"Forwarding addresses"`
+	SendAs      GmailSendAsCmd      `cmd:"" name:"sendas" hidden:"" help:"Send-as settings"`
+	Vacation    GmailVacationCmd    `cmd:"" name:"vacation" hidden:"" help:"Vacation responder"`
 }
 
-func newGmailSearchCmd(flags *rootFlags) *cobra.Command {
-	var max int64
-	var page string
-
-	cmd := &cobra.Command{
-		Use:   "search <query>",
-		Short: "Search threads using Gmail query syntax",
-		Args:  cobra.MinimumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			u := ui.FromContext(cmd.Context())
-			account, err := requireAccount(flags)
-			if err != nil {
-				return err
-			}
-			query := strings.Join(args, " ")
-
-			svc, err := newGmailService(cmd.Context(), account)
-			if err != nil {
-				return err
-			}
-
-			resp, err := svc.Users.Threads.List("me").
-				Q(query).
-				MaxResults(max).
-				PageToken(page).
-				Context(cmd.Context()).
-				Do()
-			if err != nil {
-				return err
-			}
-
-			idToName, err := fetchLabelIDToName(svc)
-			if err != nil {
-				return err
-			}
-
-			// Fetch thread details concurrently (fixes N+1 query pattern)
-			items, err := fetchThreadDetails(cmd.Context(), svc, resp.Threads, idToName)
-			if err != nil {
-				return err
-			}
-
-			if outfmt.IsJSON(cmd.Context()) {
-				return outfmt.WriteJSON(os.Stdout, map[string]any{
-					"threads":       items,
-					"nextPageToken": resp.NextPageToken,
-				})
-			}
-
-			if len(items) == 0 {
-				u.Err().Println("No results")
-				return nil
-			}
-
-			w, flush := tableWriter(cmd.Context())
-			defer flush()
-
-			fmt.Fprintln(w, "ID\tDATE\tFROM\tSUBJECT\tLABELS")
-			for _, it := range items {
-				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", it.ID, it.Date, it.From, it.Subject, strings.Join(it.Labels, ","))
-			}
-			printNextPageHint(u, resp.NextPageToken)
-			return nil
-		},
-	}
-
-	cmd.Flags().Int64Var(&max, "max", 10, "Max results")
-	cmd.Flags().StringVar(&page, "page", "", "Page token")
-	return cmd
-}
-
-func firstMessage(t *gmail.Thread) *gmail.Message {
-	if t == nil || len(t.Messages) == 0 {
-		return nil
-	}
-	return t.Messages[0]
-}
-
-func headerValue(p *gmail.MessagePart, name string) string {
-	if p == nil {
-		return ""
-	}
-	for _, h := range p.Headers {
-		if strings.EqualFold(h.Name, name) {
-			return h.Value
-		}
-	}
-	return ""
-}
-
-func formatGmailDate(raw string) string {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return ""
-	}
-	if t, err := mailParseDate(raw); err == nil {
-		return t.Format("2006-01-02 15:04")
-	}
-	return raw
-}
-
-func sanitizeTab(s string) string {
-	return strings.ReplaceAll(s, "\t", " ")
-}
-
-func mailParseDate(s string) (time.Time, error) {
-	// net/mail has the most compatible Date parser, but we keep this isolated for easier tests/mocks later.
-	return mail.ParseDate(s)
-}
-
-// threadItem holds parsed thread metadata for display/JSON output
-type threadItem struct {
-	ID      string   `json:"id"`
-	Date    string   `json:"date,omitempty"`
-	From    string   `json:"from,omitempty"`
-	Subject string   `json:"subject,omitempty"`
-	Labels  []string `json:"labels,omitempty"`
-}
-
-// fetchThreadDetails fetches thread metadata concurrently with bounded parallelism.
-// This eliminates N+1 queries by fetching all threads in parallel.
-func fetchThreadDetails(ctx context.Context, svc *gmail.Service, threads []*gmail.Thread, idToName map[string]string) ([]threadItem, error) {
-	if len(threads) == 0 {
-		return nil, nil
-	}
-
-	const maxConcurrency = 10 // Limit parallel requests to avoid rate limiting
-	sem := make(chan struct{}, maxConcurrency)
-
-	type result struct {
-		index int
-		item  threadItem
-		err   error
-	}
-
-	results := make(chan result, len(threads))
-	var wg sync.WaitGroup
-
-	for i, t := range threads {
-		if t.Id == "" {
-			continue
-		}
-
-		wg.Add(1)
-		go func(idx int, threadID string) {
-			defer wg.Done()
-
-			// Acquire semaphore
-			select {
-			case sem <- struct{}{}:
-				defer func() { <-sem }()
-			case <-ctx.Done():
-				results <- result{index: idx, err: ctx.Err()}
-				return
-			}
-
-			thread, err := svc.Users.Threads.Get("me", threadID).
-				Format("metadata").
-				MetadataHeaders("From", "Subject", "Date").
-				Context(ctx).
-				Do()
-			if err != nil {
-				results <- result{index: idx, err: err}
-				return
-			}
-
-			item := threadItem{ID: threadID}
-			if msg := firstMessage(thread); msg != nil {
-				item.Date = formatGmailDate(headerValue(msg.Payload, "Date"))
-				item.From = sanitizeTab(headerValue(msg.Payload, "From"))
-				item.Subject = sanitizeTab(headerValue(msg.Payload, "Subject"))
-				if len(msg.LabelIds) > 0 {
-					names := make([]string, 0, len(msg.LabelIds))
-					for _, id := range msg.LabelIds {
-						if n, ok := idToName[id]; ok {
-							names = append(names, n)
-						} else {
-							names = append(names, id)
-						}
-					}
-					item.Labels = names
-				}
-			}
-
-			results <- result{index: idx, item: item}
-		}(i, t.Id)
-	}
-
-	// Close results channel when all goroutines complete
-	go func() {
-		wg.Wait()
-		close(results)
-	}()
-
-	// Collect results in order
-	items := make([]threadItem, len(threads))
-	validCount := 0
-	for r := range results {
-		if r.err != nil {
-			return nil, r.err
-		}
-		items[r.index] = r.item
-		validCount++
-	}
-
-	// Filter out empty items (from threads with empty IDs)
-	filtered := make([]threadItem, 0, validCount)
-	for _, item := range items {
-		if item.ID != "" {
-			filtered = append(filtered, item)
-		}
-	}
-
-	return filtered, nil
+type GmailSettingsCmd struct {
+	Filters     GmailFiltersCmd     `cmd:"" name:"filters" group:"Organize" help:"Filter operations"`
+	Delegates   GmailDelegatesCmd   `cmd:"" name:"delegates" group:"Admin" help:"Delegate operations"`
+	Forwarding  GmailForwardingCmd  `cmd:"" name:"forwarding" group:"Admin" help:"Forwarding addresses"`
+	AutoForward GmailAutoForwardCmd `cmd:"" name:"autoforward" group:"Admin" help:"Auto-forwarding settings"`
+	SendAs      GmailSendAsCmd      `cmd:"" name:"sendas" group:"Admin" help:"Send-as settings"`
+	Vacation    GmailVacationCmd    `cmd:"" name:"vacation" group:"Admin" help:"Vacation responder"`
+	Watch       GmailWatchCmd       `cmd:"" name:"watch" group:"Admin" help:"Manage Gmail watch"`
 }

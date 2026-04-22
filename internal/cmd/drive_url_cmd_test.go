@@ -6,21 +6,18 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/steipete/gogcli/internal/outfmt"
 	"github.com/steipete/gogcli/internal/ui"
-	"google.golang.org/api/drive/v3"
-	"google.golang.org/api/option"
 )
 
 func TestDriveURLCmd_TextAndJSON(t *testing.T) {
 	origNew := newDriveService
 	t.Cleanup(func() { newDriveService = origNew })
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	svc, closeSrv := newDriveTestService(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var id string
 		switch {
 		case strings.HasPrefix(r.URL.Path, "/drive/v3/files/"):
@@ -47,22 +44,11 @@ func TestDriveURLCmd_TextAndJSON(t *testing.T) {
 			"webViewLink": web,
 		})
 	}))
-	defer srv.Close()
+	defer closeSrv()
 
-	svc, err := drive.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
-	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
+	newDriveService = stubDriveService(svc)
 
-	newDriveService = func(context.Context, string) (*drive.Service, error) {
-		return svc, nil
-	}
-
-	flags := &rootFlags{Account: "a@b.com"}
+	flags := &RootFlags{Account: "a@b.com"}
 
 	// Text mode writes via UI.Out().
 	var outBuf bytes.Buffer
@@ -73,10 +59,8 @@ func TestDriveURLCmd_TextAndJSON(t *testing.T) {
 	ctx := ui.WithUI(context.Background(), u)
 	ctx = outfmt.WithMode(ctx, outfmt.Mode{})
 
-	cmd := newDriveURLCmd(flags)
-	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{"id1", "id2"})
-	if err := cmd.Execute(); err != nil {
+	cmd := &DriveURLCmd{}
+	if err := runKong(t, cmd, []string{"id1", "id2"}, ctx, flags); err != nil {
 		t.Fatalf("execute: %v", err)
 	}
 	gotText := outBuf.String()
@@ -96,10 +80,8 @@ func TestDriveURLCmd_TextAndJSON(t *testing.T) {
 		ctx2 := ui.WithUI(context.Background(), u2)
 		ctx2 = outfmt.WithMode(ctx2, outfmt.Mode{JSON: true})
 
-		cmd2 := newDriveURLCmd(flags)
-		cmd2.SetContext(ctx2)
-		cmd2.SetArgs([]string{"id1", "id2"})
-		if err := cmd2.Execute(); err != nil {
+		cmd2 := &DriveURLCmd{}
+		if err := runKong(t, cmd2, []string{"id1", "id2"}, ctx2, flags); err != nil {
 			t.Fatalf("execute: %v", err)
 		}
 	})

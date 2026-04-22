@@ -7,9 +7,9 @@ import (
 func TestAutoForwardCommandExists(t *testing.T) {
 	// Unit tests for the actual API call live in integration; here we just ensure
 	// the command exists and is properly structured. (Compile-time coverage.)
-	_ = newGmailAutoForwardCmd
-	_ = newGmailAutoForwardGetCmd
-	_ = newGmailAutoForwardUpdateCmd
+	_ = GmailAutoForwardCmd{}
+	_ = GmailAutoForwardGetCmd{}
+	_ = GmailAutoForwardUpdateCmd{}
 }
 
 func TestValidateDisposition(t *testing.T) {

@@ -1,188 +1,208 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"os"
 	"time"
 
-	"github.com/spf13/cobra"
+	"github.com/alecthomas/kong"
+	"google.golang.org/api/gmail/v1"
+
 	"github.com/steipete/gogcli/internal/outfmt"
 	"github.com/steipete/gogcli/internal/ui"
-	"google.golang.org/api/gmail/v1"
 )
 
-func newGmailVacationCmd(flags *rootFlags) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "vacation",
-		Short: "Manage vacation responder settings",
-	}
-
-	cmd.AddCommand(newGmailVacationGetCmd(flags))
-	cmd.AddCommand(newGmailVacationUpdateCmd(flags))
-	return cmd
+type GmailVacationCmd struct {
+	Get    GmailVacationGetCmd    `cmd:"" name:"get" aliases:"info,show" help:"Get current vacation responder settings"`
+	Update GmailVacationUpdateCmd `cmd:"" name:"update" aliases:"edit,set" help:"Update vacation responder settings"`
 }
 
-func newGmailVacationGetCmd(flags *rootFlags) *cobra.Command {
-	return &cobra.Command{
-		Use:   "get",
-		Short: "Get current vacation responder settings",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			u := ui.FromContext(cmd.Context())
-			account, err := requireAccount(flags)
-			if err != nil {
-				return err
-			}
+type GmailVacationGetCmd struct{}
 
-			svc, err := newGmailService(cmd.Context(), account)
-			if err != nil {
-				return err
-			}
-
-			vacation, err := svc.Users.Settings.GetVacation("me").Do()
-			if err != nil {
-				return err
-			}
-
-			if outfmt.IsJSON(cmd.Context()) {
-				return outfmt.WriteJSON(os.Stdout, map[string]any{"vacation": vacation})
-			}
-
-			u.Out().Printf("enable_auto_reply\t%t", vacation.EnableAutoReply)
-			u.Out().Printf("response_subject\t%s", vacation.ResponseSubject)
-			u.Out().Printf("response_body_html\t%s", vacation.ResponseBodyHtml)
-			u.Out().Printf("response_body_plain_text\t%s", vacation.ResponseBodyPlainText)
-			if vacation.StartTime != 0 {
-				u.Out().Printf("start_time\t%d", vacation.StartTime)
-			}
-			if vacation.EndTime != 0 {
-				u.Out().Printf("end_time\t%d", vacation.EndTime)
-			}
-			u.Out().Printf("restrict_to_contacts\t%t", vacation.RestrictToContacts)
-			u.Out().Printf("restrict_to_domain\t%t", vacation.RestrictToDomain)
-			return nil
-		},
+func (c *GmailVacationGetCmd) Run(ctx context.Context, flags *RootFlags) error {
+	u := ui.FromContext(ctx)
+	account, err := requireAccount(flags)
+	if err != nil {
+		return err
 	}
+
+	svc, err := newGmailService(ctx, account)
+	if err != nil {
+		return err
+	}
+
+	vacation, err := svc.Users.Settings.GetVacation("me").Do()
+	if err != nil {
+		return err
+	}
+
+	if outfmt.IsJSON(ctx) {
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"vacation": vacation})
+	}
+
+	u.Out().Printf("enable_auto_reply\t%t", vacation.EnableAutoReply)
+	u.Out().Printf("response_subject\t%s", vacation.ResponseSubject)
+	u.Out().Printf("response_body_html\t%s", vacation.ResponseBodyHtml)
+	u.Out().Printf("response_body_plain_text\t%s", vacation.ResponseBodyPlainText)
+	if vacation.StartTime != 0 {
+		u.Out().Printf("start_time\t%d", vacation.StartTime)
+	}
+	if vacation.EndTime != 0 {
+		u.Out().Printf("end_time\t%d", vacation.EndTime)
+	}
+	u.Out().Printf("restrict_to_contacts\t%t", vacation.RestrictToContacts)
+	u.Out().Printf("restrict_to_domain\t%t", vacation.RestrictToDomain)
+	return nil
 }
 
-func newGmailVacationUpdateCmd(flags *rootFlags) *cobra.Command {
-	var enable bool
-	var disable bool
-	var subject string
-	var body string
-	var startTime string
-	var endTime string
-	var contactsOnly bool
-	var domainOnly bool
+type GmailVacationUpdateCmd struct {
+	Enable       bool   `name:"enable" help:"Enable vacation responder"`
+	Disable      bool   `name:"disable" help:"Disable vacation responder"`
+	Subject      string `name:"subject" help:"Subject line for auto-reply"`
+	Body         string `name:"body" help:"HTML body of the auto-reply message"`
+	Start        string `name:"start" help:"Start time in RFC3339 format (e.g., 2024-12-20T00:00:00Z)"`
+	End          string `name:"end" help:"End time in RFC3339 format (e.g., 2024-12-31T23:59:59Z)"`
+	ContactsOnly bool   `name:"contacts-only" help:"Only respond to contacts"`
+	DomainOnly   bool   `name:"domain-only" help:"Only respond to same domain"`
+}
 
-	cmd := &cobra.Command{
-		Use:   "update",
-		Short: "Update vacation responder settings",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			u := ui.FromContext(cmd.Context())
-			account, err := requireAccount(flags)
-			if err != nil {
-				return err
-			}
-
-			if enable && disable {
-				return errors.New("cannot specify both --enable and --disable")
-			}
-
-			svc, err := newGmailService(cmd.Context(), account)
-			if err != nil {
-				return err
-			}
-
-			// Get current settings first
-			current, err := svc.Users.Settings.GetVacation("me").Do()
-			if err != nil {
-				return err
-			}
-
-			// Build update request, preserving existing values if not specified
-			vacation := &gmail.VacationSettings{
-				EnableAutoReply:       current.EnableAutoReply,
-				ResponseSubject:       current.ResponseSubject,
-				ResponseBodyHtml:      current.ResponseBodyHtml,
-				ResponseBodyPlainText: current.ResponseBodyPlainText,
-				StartTime:             current.StartTime,
-				EndTime:               current.EndTime,
-				RestrictToContacts:    current.RestrictToContacts,
-				RestrictToDomain:      current.RestrictToDomain,
-			}
-
-			// Apply flags
-			if enable {
-				vacation.EnableAutoReply = true
-			}
-			if disable {
-				vacation.EnableAutoReply = false
-			}
-			if cmd.Flags().Changed("subject") {
-				vacation.ResponseSubject = subject
-			}
-			if cmd.Flags().Changed("body") {
-				vacation.ResponseBodyHtml = body
-				vacation.ResponseBodyPlainText = stripHTML(body)
-			}
-			if cmd.Flags().Changed("start") {
-				var t int64
-				t, err = parseRFC3339ToMillis(startTime)
-				if err != nil {
-					return err
-				}
-				vacation.StartTime = t
-			}
-			if cmd.Flags().Changed("end") {
-				var t int64
-				t, err = parseRFC3339ToMillis(endTime)
-				if err != nil {
-					return err
-				}
-				vacation.EndTime = t
-			}
-			if cmd.Flags().Changed("contacts-only") {
-				vacation.RestrictToContacts = contactsOnly
-			}
-			if cmd.Flags().Changed("domain-only") {
-				vacation.RestrictToDomain = domainOnly
-			}
-
-			updated, err := svc.Users.Settings.UpdateVacation("me", vacation).Do()
-			if err != nil {
-				return err
-			}
-
-			if outfmt.IsJSON(cmd.Context()) {
-				return outfmt.WriteJSON(os.Stdout, map[string]any{"vacation": updated})
-			}
-
-			u.Out().Println("Vacation responder updated successfully")
-			u.Out().Printf("enable_auto_reply\t%t", updated.EnableAutoReply)
-			u.Out().Printf("response_subject\t%s", updated.ResponseSubject)
-			if updated.StartTime != 0 {
-				u.Out().Printf("start_time\t%d", updated.StartTime)
-			}
-			if updated.EndTime != 0 {
-				u.Out().Printf("end_time\t%d", updated.EndTime)
-			}
-			u.Out().Printf("restrict_to_contacts\t%t", updated.RestrictToContacts)
-			u.Out().Printf("restrict_to_domain\t%t", updated.RestrictToDomain)
-			return nil
-		},
+func (c *GmailVacationUpdateCmd) Run(ctx context.Context, kctx *kong.Context, flags *RootFlags) error {
+	u := ui.FromContext(ctx)
+	if c.Enable && c.Disable {
+		return errors.New("cannot specify both --enable and --disable")
 	}
 
-	cmd.Flags().BoolVar(&enable, "enable", false, "Enable vacation responder")
-	cmd.Flags().BoolVar(&disable, "disable", false, "Disable vacation responder")
-	cmd.Flags().StringVar(&subject, "subject", "", "Subject line for auto-reply")
-	cmd.Flags().StringVar(&body, "body", "", "HTML body of the auto-reply message")
-	cmd.Flags().StringVar(&startTime, "start", "", "Start time in RFC3339 format (e.g., 2024-12-20T00:00:00Z)")
-	cmd.Flags().StringVar(&endTime, "end", "", "End time in RFC3339 format (e.g., 2024-12-31T23:59:59Z)")
-	cmd.Flags().BoolVar(&contactsOnly, "contacts-only", false, "Only respond to contacts")
-	cmd.Flags().BoolVar(&domainOnly, "domain-only", false, "Only respond to same domain")
-	return cmd
+	var err error
+	updates := map[string]any{}
+	if c.Enable {
+		updates["enable_auto_reply"] = true
+	}
+	if c.Disable {
+		updates["enable_auto_reply"] = false
+	}
+	if flagProvided(kctx, "subject") {
+		updates["response_subject"] = c.Subject
+	}
+	if flagProvided(kctx, "body") {
+		updates["response_body_html"] = c.Body
+		updates["response_body_plain_text"] = stripHTML(c.Body)
+	}
+	if flagProvided(kctx, "start") {
+		var t int64
+		t, err = parseRFC3339ToMillis(c.Start)
+		if err != nil {
+			return err
+		}
+		updates["start_time"] = t
+	}
+	if flagProvided(kctx, "end") {
+		var t int64
+		t, err = parseRFC3339ToMillis(c.End)
+		if err != nil {
+			return err
+		}
+		updates["end_time"] = t
+	}
+	if flagProvided(kctx, "contacts-only") {
+		updates["restrict_to_contacts"] = c.ContactsOnly
+	}
+	if flagProvided(kctx, "domain-only") {
+		updates["restrict_to_domain"] = c.DomainOnly
+	}
+
+	if dryRunErr := dryRunExit(ctx, flags, "gmail.vacation.update", map[string]any{
+		"updates": updates,
+	}); dryRunErr != nil {
+		return dryRunErr
+	}
+
+	account, err := requireAccount(flags)
+	if err != nil {
+		return err
+	}
+
+	svc, err := newGmailService(ctx, account)
+	if err != nil {
+		return err
+	}
+
+	// Get current settings first
+	current, err := svc.Users.Settings.GetVacation("me").Do()
+	if err != nil {
+		return err
+	}
+
+	// Build update request, preserving existing values if not specified
+	vacation := &gmail.VacationSettings{
+		EnableAutoReply:       current.EnableAutoReply,
+		ResponseSubject:       current.ResponseSubject,
+		ResponseBodyHtml:      current.ResponseBodyHtml,
+		ResponseBodyPlainText: current.ResponseBodyPlainText,
+		StartTime:             current.StartTime,
+		EndTime:               current.EndTime,
+		RestrictToContacts:    current.RestrictToContacts,
+		RestrictToDomain:      current.RestrictToDomain,
+	}
+
+	// Apply flags
+	if c.Enable {
+		vacation.EnableAutoReply = true
+	}
+	if c.Disable {
+		vacation.EnableAutoReply = false
+	}
+	if flagProvided(kctx, "subject") {
+		vacation.ResponseSubject = c.Subject
+	}
+	if flagProvided(kctx, "body") {
+		vacation.ResponseBodyHtml = c.Body
+		vacation.ResponseBodyPlainText = stripHTML(c.Body)
+	}
+	if flagProvided(kctx, "start") {
+		var t int64
+		t, err = parseRFC3339ToMillis(c.Start)
+		if err != nil {
+			return err
+		}
+		vacation.StartTime = t
+	}
+	if flagProvided(kctx, "end") {
+		var t int64
+		t, err = parseRFC3339ToMillis(c.End)
+		if err != nil {
+			return err
+		}
+		vacation.EndTime = t
+	}
+	if flagProvided(kctx, "contacts-only") {
+		vacation.RestrictToContacts = c.ContactsOnly
+	}
+	if flagProvided(kctx, "domain-only") {
+		vacation.RestrictToDomain = c.DomainOnly
+	}
+
+	updated, err := svc.Users.Settings.UpdateVacation("me", vacation).Do()
+	if err != nil {
+		return err
+	}
+
+	if outfmt.IsJSON(ctx) {
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"vacation": updated})
+	}
+
+	u.Out().Println("Vacation responder updated successfully")
+	u.Out().Printf("enable_auto_reply\t%t", updated.EnableAutoReply)
+	u.Out().Printf("response_subject\t%s", updated.ResponseSubject)
+	if updated.StartTime != 0 {
+		u.Out().Printf("start_time\t%d", updated.StartTime)
+	}
+	if updated.EndTime != 0 {
+		u.Out().Printf("end_time\t%d", updated.EndTime)
+	}
+	u.Out().Printf("restrict_to_contacts\t%t", updated.RestrictToContacts)
+	u.Out().Printf("restrict_to_domain\t%t", updated.RestrictToDomain)
+	return nil
 }
 
 func parseRFC3339ToMillis(rfc3339 string) (int64, error) {
@@ -198,8 +218,18 @@ func parseRFC3339ToMillis(rfc3339 string) (int64, error) {
 }
 
 func stripHTML(html string) string {
-	// Simple HTML stripping for plain text version
-	// This is a basic implementation - Gmail API will handle more complex conversions
-	// For now, just return the HTML as-is, Gmail will auto-convert
-	return html
+	// Very basic HTML stripping for plain text fallback
+	inTag := false
+	out := make([]rune, 0, len(html))
+	for _, r := range html {
+		switch {
+		case r == '<':
+			inTag = true
+		case r == '>':
+			inTag = false
+		case !inTag:
+			out = append(out, r)
+		}
+	}
+	return string(out)
 }

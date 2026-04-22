@@ -10,10 +10,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/steipete/gogcli/internal/outfmt"
-	"github.com/steipete/gogcli/internal/ui"
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/option"
+
+	"github.com/steipete/gogcli/internal/outfmt"
+	"github.com/steipete/gogcli/internal/ui"
 )
 
 func TestDrivePermissionsCmd_TextAndJSON(t *testing.T) {
@@ -54,7 +55,7 @@ func TestDrivePermissionsCmd_TextAndJSON(t *testing.T) {
 	}
 	newDriveService = func(context.Context, string) (*drive.Service, error) { return svc, nil }
 
-	flags := &rootFlags{Account: "a@b.com"}
+	flags := &RootFlags{Account: "a@b.com"}
 
 	// Text mode: table to stdout + next page hint to stderr.
 	var errBuf bytes.Buffer
@@ -66,10 +67,8 @@ func TestDrivePermissionsCmd_TextAndJSON(t *testing.T) {
 	ctx = outfmt.WithMode(ctx, outfmt.Mode{})
 
 	textOut := captureStdout(t, func() {
-		cmd := newDrivePermissionsCmd(flags)
-		cmd.SetContext(ctx)
-		cmd.SetArgs([]string{"--max", "1", "--page", "p1", "id1"})
-		if execErr := cmd.Execute(); execErr != nil {
+		cmd := &DrivePermissionsCmd{}
+		if execErr := runKong(t, cmd, []string{"--max", "1", "--page", "p1", "id1"}, ctx, flags); execErr != nil {
 			t.Fatalf("execute: %v", execErr)
 		}
 	})
@@ -93,10 +92,8 @@ func TestDrivePermissionsCmd_TextAndJSON(t *testing.T) {
 	ctx2 = outfmt.WithMode(ctx2, outfmt.Mode{JSON: true})
 
 	jsonOut := captureStdout(t, func() {
-		cmd := newDrivePermissionsCmd(flags)
-		cmd.SetContext(ctx2)
-		cmd.SetArgs([]string{"--max", "1", "--page", "p1", "id1"})
-		if execErr := cmd.Execute(); execErr != nil {
+		cmd := &DrivePermissionsCmd{}
+		if execErr := runKong(t, cmd, []string{"--max", "1", "--page", "p1", "id1"}, ctx2, flags); execErr != nil {
 			t.Fatalf("execute: %v", execErr)
 		}
 	})
@@ -155,7 +152,7 @@ func TestDrivePermissionsCmd_OmitsEmptyPageToken(t *testing.T) {
 	}
 	newDriveService = func(context.Context, string) (*drive.Service, error) { return svc, nil }
 
-	flags := &rootFlags{Account: "a@b.com"}
+	flags := &RootFlags{Account: "a@b.com"}
 	ctx := outfmt.WithMode(context.Background(), outfmt.Mode{JSON: true})
 	u, err := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
 	if err != nil {
@@ -164,10 +161,8 @@ func TestDrivePermissionsCmd_OmitsEmptyPageToken(t *testing.T) {
 	ctx = ui.WithUI(ctx, u)
 
 	out := captureStdout(t, func() {
-		cmd := newDrivePermissionsCmd(flags)
-		cmd.SetContext(ctx)
-		cmd.SetArgs([]string{"--max", "1", "id1"})
-		if execErr := cmd.Execute(); execErr != nil {
+		cmd := &DrivePermissionsCmd{}
+		if execErr := runKong(t, cmd, []string{"--max", "1", "id1"}, ctx, flags); execErr != nil {
 			t.Fatalf("execute: %v", execErr)
 		}
 	})

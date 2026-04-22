@@ -12,18 +12,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/steipete/gogcli/internal/outfmt"
-	"github.com/steipete/gogcli/internal/ui"
 	"google.golang.org/api/gmail/v1"
 	"google.golang.org/api/option"
+
+	"github.com/steipete/gogcli/internal/outfmt"
+	"github.com/steipete/gogcli/internal/ui"
 )
 
 func TestGmailWatchStartCmd_JSON(t *testing.T) {
 	origNew := newGmailService
 	t.Cleanup(func() { newGmailService = origNew })
 
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setWatchTestConfigHome(t)
 
 	var watchReq struct {
 		TopicName string   `json:"topicName"`
@@ -67,7 +67,7 @@ func TestGmailWatchStartCmd_JSON(t *testing.T) {
 	}
 	newGmailService = func(context.Context, string) (*gmail.Service, error) { return svc, nil }
 
-	flags := &rootFlags{Account: "a@b.com"}
+	flags := &RootFlags{Account: "a@b.com"}
 	out := captureStdout(t, func() {
 		u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
 		if uiErr != nil {
@@ -76,9 +76,7 @@ func TestGmailWatchStartCmd_JSON(t *testing.T) {
 		ctx := ui.WithUI(context.Background(), u)
 		ctx = outfmt.WithMode(ctx, outfmt.Mode{JSON: true})
 
-		cmd := newGmailWatchStartCmd(flags)
-		cmd.SetContext(ctx)
-		cmd.SetArgs([]string{
+		if execErr := runKong(t, &GmailWatchStartCmd{}, []string{
 			"--topic", "projects/p/topics/t",
 			"--label", "INBOX",
 			"--label", "Custom",
@@ -86,8 +84,7 @@ func TestGmailWatchStartCmd_JSON(t *testing.T) {
 			"--hook-token", "tok",
 			"--include-body",
 			"--max-bytes", "5",
-		})
-		if execErr := cmd.Execute(); execErr != nil {
+		}, ctx, flags); execErr != nil {
 			t.Fatalf("execute: %v", execErr)
 		}
 	})
@@ -128,8 +125,7 @@ func TestGmailWatchServerServeHTTP_TruncateBody(t *testing.T) {
 	origNew := newGmailService
 	t.Cleanup(func() { newGmailService = origNew })
 
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setWatchTestConfigHome(t)
 
 	store, err := newGmailWatchStore("me@example.com")
 	if err != nil {
@@ -217,7 +213,7 @@ func TestGmailWatchServerServeHTTP_TruncateBody(t *testing.T) {
 	env.Message.Data = base64.StdEncoding.EncodeToString(payload)
 
 	data, _ := json.Marshal(env)
-	req := httptest.NewRequest(http.MethodPost, "http://example.com/gmail-pubsub", bytes.NewReader(data))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "http://example.com/gmail-pubsub", bytes.NewReader(data))
 	req.Header.Set("x-gog-token", "token")
 	rec := httptest.NewRecorder()
 

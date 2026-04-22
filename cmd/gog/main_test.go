@@ -1,12 +1,16 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"testing"
 )
 
 func TestMainHelpDoesNotExit(t *testing.T) {
+	t.Helper()
+
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
@@ -21,13 +25,14 @@ func TestMainExitOnError(t *testing.T) {
 		return
 	}
 
-	cmd := exec.Command(os.Args[0], "-test.run", "^TestMainExitOnError$")
+	cmd := exec.CommandContext(context.Background(), os.Args[0], "-test.run", "^TestMainExitOnError$")
 	cmd.Env = append(os.Environ(), "GOGCLI_TEST_CHILD=1")
 	err := cmd.Run()
 	if err == nil {
 		t.Fatalf("expected exit error")
 	}
-	if ee, ok := err.(*exec.ExitError); ok {
+	var ee *exec.ExitError
+	if errors.As(err, &ee) {
 		if ee.ExitCode() != 2 {
 			t.Fatalf("exit=%d", ee.ExitCode())
 		}

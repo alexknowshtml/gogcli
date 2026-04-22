@@ -17,7 +17,7 @@ func TestExecute_CalendarEvent_Text(t *testing.T) {
 	t.Cleanup(func() { newCalendarService = origNew })
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !(strings.Contains(r.URL.Path, "/calendars/c1/events/e1") && r.Method == http.MethodGet) {
+		if !(strings.Contains(r.URL.Path, "/calendars/c1@example.com/events/e1") && r.Method == http.MethodGet) {
 			http.NotFound(w, r)
 			return
 		}
@@ -51,12 +51,12 @@ func TestExecute_CalendarEvent_Text(t *testing.T) {
 
 	out := captureStdout(t, func() {
 		_ = captureStderr(t, func() {
-			if err := Execute([]string{"--account", "a@b.com", "calendar", "event", "c1", "e1"}); err != nil {
+			if err := Execute([]string{"--account", "a@b.com", "calendar", "event", "c1@example.com", "e1"}); err != nil {
 				t.Fatalf("Execute: %v", err)
 			}
 		})
 	})
-	if !strings.Contains(out, "id\te1") || !strings.Contains(out, "location\tRoom 1") || !strings.Contains(out, "attendees\ta@b.com, b@b.com") || !strings.Contains(out, "link\thttps://example.com/e1") {
+	if !strings.Contains(out, "id\te1") || !strings.Contains(out, "location\tRoom 1") || !strings.Contains(out, "attendee\ta@b.com\t") || !strings.Contains(out, "attendee\tb@b.com\t") || !strings.Contains(out, "link\thttps://example.com/e1") {
 		t.Fatalf("unexpected out=%q", out)
 	}
 }
@@ -66,7 +66,7 @@ func TestExecute_CalendarAcl_Text(t *testing.T) {
 	t.Cleanup(func() { newCalendarService = origNew })
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !(strings.Contains(r.URL.Path, "/calendars/c1/acl") && r.Method == http.MethodGet) {
+		if !(strings.Contains(r.URL.Path, "/calendars/c1@example.com/acl") && r.Method == http.MethodGet) {
 			http.NotFound(w, r)
 			return
 		}
@@ -91,7 +91,7 @@ func TestExecute_CalendarAcl_Text(t *testing.T) {
 
 	out := captureStdout(t, func() {
 		_ = captureStderr(t, func() {
-			if err := Execute([]string{"--account", "a@b.com", "calendar", "acl", "c1"}); err != nil {
+			if err := Execute([]string{"--account", "a@b.com", "calendar", "acl", "c1@example.com"}); err != nil {
 				t.Fatalf("Execute: %v", err)
 			}
 		})

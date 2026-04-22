@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -13,7 +14,7 @@ func TestExecute_TasksAdd_RequiresTitle(t *testing.T) {
 	t.Cleanup(func() { newTasksService = origNew })
 	newTasksService = func(context.Context, string) (*tasks.Service, error) {
 		t.Fatalf("expected validation to fail before creating service")
-		return nil, nil
+		return nil, errors.New("unexpected tasks service call")
 	}
 
 	_ = captureStderr(t, func() {
@@ -29,7 +30,7 @@ func TestExecute_TasksUpdate_RequiresFields(t *testing.T) {
 	t.Cleanup(func() { newTasksService = origNew })
 	newTasksService = func(context.Context, string) (*tasks.Service, error) {
 		t.Fatalf("expected validation to fail before creating service")
-		return nil, nil
+		return nil, errors.New("unexpected tasks service call")
 	}
 
 	_ = captureStderr(t, func() {
@@ -45,7 +46,7 @@ func TestExecute_TasksUpdate_RejectsInvalidStatus(t *testing.T) {
 	t.Cleanup(func() { newTasksService = origNew })
 	newTasksService = func(context.Context, string) (*tasks.Service, error) {
 		t.Fatalf("expected validation to fail before creating service")
-		return nil, nil
+		return nil, errors.New("unexpected tasks service call")
 	}
 
 	_ = captureStderr(t, func() {

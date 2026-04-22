@@ -2,6 +2,7 @@ package googleapi
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"math/rand/v2"
@@ -25,6 +26,7 @@ func NewRetryTransport(base http.RoundTripper) *RetryTransport {
 	if base == nil {
 		base = http.DefaultTransport
 	}
+
 	return &RetryTransport{
 		Base:           base,
 		MaxRetries429:  MaxRateLimitRetries,
@@ -55,15 +57,17 @@ func (t *RetryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			if req.Body != nil {
 				_ = req.Body.Close()
 			}
-			req.Body, err = req.GetBody()
-			if err != nil {
-				return nil, err
+
+			if body, getErr := req.GetBody(); getErr != nil {
+				return nil, fmt.Errorf("reset request body: %w", getErr)
+			} else {
+				req.Body = body
 			}
 		}
 
 		resp, err = t.Base.RoundTrip(req)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("round trip: %w", err)
 		}
 
 		// Success
@@ -71,6 +75,7 @@ func (t *RetryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			if t.CircuitBreaker != nil {
 				t.CircuitBreaker.RecordSuccess()
 			}
+
 			return resp, nil
 		}
 
@@ -81,7 +86,7 @@ func (t *RetryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			}
 
 			delay := t.calculateBackoff(retries429, resp)
-			slog.Debug("rate limited, retrying",
+			slog.Debug("rate limited, retrying", //nolint:gosec // logged values are internal retry metadata
 				"delay", delay,
 				"attempt", retries429+1,
 				"max_retries", t.MaxRetries429)
@@ -93,6 +98,7 @@ func (t *RetryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			}
 
 			retries429++
+
 			continue
 		}
 
@@ -106,7 +112,7 @@ func (t *RetryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 				return resp, nil
 			}
 
-			slog.Debug("server error, retrying",
+			slog.Debug("server error, retrying", //nolint:gosec // logged values are internal retry metadata
 				"status", resp.StatusCode,
 				"attempt", retries5xx+1)
 
@@ -117,6 +123,7 @@ func (t *RetryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			}
 
 			retries5xx++
+
 			continue
 		}
 
@@ -132,13 +139,16 @@ func (t *RetryTransport) calculateBackoff(attempt int, resp *http.Response) time
 			if seconds < 0 {
 				return 0
 			}
+
 			return time.Duration(seconds) * time.Second
 		}
+
 		if t, err := http.ParseTime(retryAfter); err == nil {
 			d := time.Until(t)
 			if d < 0 {
 				return 0
 			}
+
 			return d
 		}
 	}
@@ -147,16 +157,21 @@ func (t *RetryTransport) calculateBackoff(attempt int, resp *http.Response) time
 	if t.BaseDelay <= 0 {
 		return 0
 	}
-	baseDelay := t.BaseDelay * time.Duration(1<<attempt)
-	if baseDelay <= 0 {
+
+	var baseDelay time.Duration
+
+	if bd := t.BaseDelay * time.Duration(1<<attempt); bd <= 0 {
 		return 0
+	} else {
+		baseDelay = bd
 	}
 
 	jitterRange := baseDelay / 2
 	if jitterRange <= 0 {
 		return baseDelay
 	}
-	jitter := time.Duration(rand.Int64N(int64(jitterRange)))
+	jitter := time.Duration(rand.Int64N(int64(jitterRange))) //nolint:gosec // non-crypto jitter
+
 	return baseDelay + jitter
 }
 
@@ -165,12 +180,14 @@ func (t *RetryTransport) sleep(ctx context.Context, d time.Duration) error {
 		return nil
 	}
 	timer := time.NewTimer(d)
+
 	defer timer.Stop()
+
 	select {
 	case <-timer.C:
 		return nil
 	case <-ctx.Done():
-		return ctx.Err()
+		return fmt.Errorf("sleep interrupted: %w", ctx.Err())
 	}
 }
 
@@ -190,6 +207,7 @@ func (r *bytesReader) Read(p []byte) (n int, err error) {
 	}
 	n = copy(p, r.data[r.pos:])
 	r.pos += n
+
 	return n, nil
 }
 
@@ -200,7 +218,7 @@ func ensureReplayableBody(req *http.Request) error {
 
 	bodyBytes, err := io.ReadAll(req.Body)
 	if err != nil {
-		return err
+		return fmt.Errorf("read request body: %w", err)
 	}
 	_ = req.Body.Close()
 
@@ -208,6 +226,7 @@ func ensureReplayableBody(req *http.Request) error {
 		return io.NopCloser(newBytesReader(bodyBytes)), nil
 	}
 	req.Body = io.NopCloser(newBytesReader(bodyBytes))
+
 	return nil
 }
 

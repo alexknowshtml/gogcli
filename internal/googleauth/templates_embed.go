@@ -5,9 +5,6 @@ import _ "embed"
 //go:embed templates/accounts.html
 var accountsTemplate string
 
-//go:embed templates/success_new.html
-var successTemplateNew string
-
 //go:embed templates/success.html
 var successTemplate string
 

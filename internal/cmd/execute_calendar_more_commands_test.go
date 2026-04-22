@@ -16,10 +16,10 @@ func TestExecute_CalendarMoreCommands_JSON(t *testing.T) {
 	origNew := newCalendarService
 	t.Cleanup(func() { newCalendarService = origNew })
 
-	const calendarID = "c1"
+	const calendarID = "c1@example.com"
 	const eventID = "e1"
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(withPrimaryCalendar(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 		switch {
 		case strings.Contains(path, "/calendars/"+calendarID+"/acl") && r.Method == http.MethodGet:
@@ -39,7 +39,7 @@ func TestExecute_CalendarMoreCommands_JSON(t *testing.T) {
 				"end":     map[string]any{"dateTime": "2025-12-17T11:00:00Z"},
 			})
 			return
-		case strings.Contains(path, "/calendars/"+calendarID+"/events/"+eventID) && r.Method == http.MethodPut:
+		case strings.Contains(path, "/calendars/"+calendarID+"/events/"+eventID) && (r.Method == http.MethodPatch || r.Method == http.MethodPut):
 			var payload map[string]any
 			_ = json.NewDecoder(r.Body).Decode(&payload)
 			payload["id"] = eventID
@@ -79,7 +79,7 @@ func TestExecute_CalendarMoreCommands_JSON(t *testing.T) {
 			http.NotFound(w, r)
 			return
 		}
-	}))
+	})))
 	defer srv.Close()
 
 	svc, err := calendar.NewService(context.Background(),

@@ -8,6 +8,12 @@ This playbook mirrors the Homebrew + GitHub flow used in `../camsnap`.
 
 Always do **all** steps below (CI + changelog + tag + GitHub release artifacts + tap update + Homebrew sanity install). No partial releases.
 
+Shortcut scripts (preferred, keep notes non-empty):
+```sh
+scripts/release.sh X.Y.Z
+scripts/verify-release.sh X.Y.Z
+```
+
 Assumptions:
 - Repo: `steipete/gogcli`
 - Tap repo: `../homebrew-tap` (tap: `steipete/tap`)
@@ -55,6 +61,8 @@ gh run list -L 5 --workflow release.yml
 gh release view vX.Y.Z
 ```
 
+Ensure GitHub release notes are not empty (mirror the changelog section).
+
 If the workflow needs a rerun:
 ```sh
 gh workflow run release.yml -f tag=vX.Y.Z
@@ -98,5 +106,4 @@ gog --help
 ```
 
 ## Notes
-- `gog` currently does not print a version string; use tags + changelog as the source of truth.
-- If you later add `gog version`, update this doc to validate `gog version` post-install.
+- `gog --version` / `gog version` should report the release version post-install.

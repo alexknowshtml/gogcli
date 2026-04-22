@@ -17,9 +17,11 @@ func TestCircuitBreaker_OpenAndReset(t *testing.T) {
 			t.Fatalf("expected circuit to open on threshold")
 		}
 	}
+
 	if !cb.IsOpen() {
 		t.Fatalf("expected open")
 	}
+
 	if cb.State() != "open" {
 		t.Fatalf("expected open state")
 	}
@@ -29,6 +31,7 @@ func TestCircuitBreaker_OpenAndReset(t *testing.T) {
 	if cb.IsOpen() {
 		t.Fatalf("expected closed after timeout")
 	}
+
 	if cb.State() != "closed" {
 		t.Fatalf("expected closed after timeout")
 	}
@@ -36,6 +39,7 @@ func TestCircuitBreaker_OpenAndReset(t *testing.T) {
 	// Explicit success reset path.
 	cb.RecordFailure()
 	cb.RecordSuccess()
+
 	if cb.State() != "closed" {
 		t.Fatalf("expected closed after success")
 	}

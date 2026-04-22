@@ -21,22 +21,27 @@ func TestOpenBrowserCommand(t *testing.T) {
 
 func TestOpenBrowser_UsesStartCommand(t *testing.T) {
 	orig := startCommand
+
 	t.Cleanup(func() { startCommand = orig })
 
 	var gotName string
 	var gotArgs []string
 	startCommand = func(name string, args ...string) error {
 		gotName = name
+
 		gotArgs = append([]string(nil), args...)
+
 		return nil
 	}
 
 	if err := openBrowser("https://example.com"); err != nil {
 		t.Fatalf("openBrowser: %v", err)
 	}
+
 	if gotName == "" || len(gotArgs) == 0 {
 		t.Fatalf("expected startCommand to be called")
 	}
+
 	if gotArgs[len(gotArgs)-1] != "https://example.com" {
 		t.Fatalf("unexpected args: %q %#v", gotName, gotArgs)
 	}

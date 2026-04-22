@@ -2,74 +2,94 @@ package googleapi
 
 import (
 	"context"
-	"errors"
+	"path/filepath"
+	"strings"
 	"testing"
 
-	"github.com/99designs/keyring"
 	"github.com/steipete/gogcli/internal/config"
 	"github.com/steipete/gogcli/internal/secrets"
 )
 
-func TestNewServices_HappyPath(t *testing.T) {
+func TestNewServicesWithStoredToken(t *testing.T) {
 	origRead := readClientCredentials
 	origOpen := openSecretsStore
+
 	t.Cleanup(func() {
 		readClientCredentials = origRead
 		openSecretsStore = origOpen
 	})
 
-	readClientCredentials = func() (config.ClientCredentials, error) {
+	readClientCredentials = func(string) (config.ClientCredentials, error) {
 		return config.ClientCredentials{ClientID: "id", ClientSecret: "secret"}, nil
 	}
+
+	store := &stubStore{tok: secrets.Token{RefreshToken: "rt"}}
 	openSecretsStore = func() (secrets.Store, error) {
-		return &stubStore{tok: secrets.Token{Email: "a@b.com", RefreshToken: "rt"}}, nil
+		return store, nil
 	}
 
 	ctx := context.Background()
-	if svc, err := NewGmail(ctx, "a@b.com"); err != nil || svc == nil {
+
+	if _, err := NewGmail(ctx, "a@b.com"); err != nil {
 		t.Fatalf("NewGmail: %v", err)
 	}
-	if svc, err := NewDrive(ctx, "a@b.com"); err != nil || svc == nil {
+
+	if _, err := NewDrive(ctx, "a@b.com"); err != nil {
 		t.Fatalf("NewDrive: %v", err)
 	}
-	if svc, err := NewCalendar(ctx, "a@b.com"); err != nil || svc == nil {
+
+	if _, err := NewDocs(ctx, "a@b.com"); err != nil {
+		t.Fatalf("NewDocs: %v", err)
+	}
+
+	if _, err := NewCalendar(ctx, "a@b.com"); err != nil {
 		t.Fatalf("NewCalendar: %v", err)
 	}
-	if svc, err := NewSheets(ctx, "a@b.com"); err != nil || svc == nil {
+
+	if _, err := NewClassroom(ctx, "a@b.com"); err != nil {
+		t.Fatalf("NewClassroom: %v", err)
+	}
+
+	if _, err := NewChat(ctx, "a@b.com"); err != nil {
+		t.Fatalf("NewChat: %v", err)
+	}
+
+	if _, err := NewSheets(ctx, "a@b.com"); err != nil {
 		t.Fatalf("NewSheets: %v", err)
 	}
-	if svc, err := NewPeopleContacts(ctx, "a@b.com"); err != nil || svc == nil {
+
+	if _, err := NewTasks(ctx, "a@b.com"); err != nil {
+		t.Fatalf("NewTasks: %v", err)
+	}
+
+	if _, err := NewKeep(ctx, "a@b.com"); err != nil {
+		t.Fatalf("NewKeep: %v", err)
+	}
+
+	if _, err := NewCloudIdentityGroups(ctx, "a@b.com"); err != nil {
+		t.Fatalf("NewCloudIdentityGroups: %v", err)
+	}
+
+	if _, err := NewPeopleContacts(ctx, "a@b.com"); err != nil {
 		t.Fatalf("NewPeopleContacts: %v", err)
 	}
-	if svc, err := NewPeopleOtherContacts(ctx, "a@b.com"); err != nil || svc == nil {
+
+	if _, err := NewPeopleOtherContacts(ctx, "a@b.com"); err != nil {
 		t.Fatalf("NewPeopleOtherContacts: %v", err)
 	}
-	if svc, err := NewPeopleDirectory(ctx, "a@b.com"); err != nil || svc == nil {
+
+	if _, err := NewPeopleDirectory(ctx, "a@b.com"); err != nil {
 		t.Fatalf("NewPeopleDirectory: %v", err)
 	}
 }
 
-func TestNewServices_AuthRequired(t *testing.T) {
-	origRead := readClientCredentials
-	origOpen := openSecretsStore
-	t.Cleanup(func() {
-		readClientCredentials = origRead
-		openSecretsStore = origOpen
-	})
-
-	readClientCredentials = func() (config.ClientCredentials, error) {
-		return config.ClientCredentials{ClientID: "id", ClientSecret: "secret"}, nil
-	}
-	openSecretsStore = func() (secrets.Store, error) {
-		return &stubStore{err: keyring.ErrKeyNotFound}, nil
-	}
-
-	_, err := NewGmail(context.Background(), "a@b.com")
+func TestNewKeepWithServiceAccountErrors(t *testing.T) {
+	_, err := NewKeepWithServiceAccount(context.Background(), filepath.Join(t.TempDir(), "missing.json"), "a@b.com")
 	if err == nil {
 		t.Fatalf("expected error")
 	}
-	var are *AuthRequiredError
-	if !errors.As(err, &are) {
-		t.Fatalf("expected AuthRequiredError, got: %T %v", err, err)
+
+	if !strings.Contains(err.Error(), "read service account file") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }

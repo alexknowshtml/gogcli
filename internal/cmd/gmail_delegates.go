@@ -1,189 +1,148 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
-	"text/tabwriter"
+	"strings"
 
-	"github.com/spf13/cobra"
+	"google.golang.org/api/gmail/v1"
+
 	"github.com/steipete/gogcli/internal/outfmt"
 	"github.com/steipete/gogcli/internal/ui"
-	"google.golang.org/api/gmail/v1"
 )
 
-func newGmailDelegatesCmd(flags *rootFlags) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "delegates",
-		Short: "Manage email delegation (G Suite/Workspace feature)",
-		Long: `Manage email delegation settings.
-
-Delegation allows someone else to read, send, and delete messages on your behalf.
-This is a G Suite/Workspace feature and may not be available for personal Gmail accounts.`,
-	}
-
-	cmd.AddCommand(newGmailDelegatesListCmd(flags))
-	cmd.AddCommand(newGmailDelegatesGetCmd(flags))
-	cmd.AddCommand(newGmailDelegatesAddCmd(flags))
-	cmd.AddCommand(newGmailDelegatesRemoveCmd(flags))
-	return cmd
+type GmailDelegatesCmd struct {
+	List   GmailDelegatesListCmd   `cmd:"" name:"list" aliases:"ls" help:"List all delegates"`
+	Get    GmailDelegatesGetCmd    `cmd:"" name:"get" aliases:"info,show" help:"Get a specific delegate's information"`
+	Add    GmailDelegatesAddCmd    `cmd:"" name:"add" aliases:"create,new" help:"Add a delegate"`
+	Remove GmailDelegatesRemoveCmd `cmd:"" name:"remove" aliases:"delete,rm,del" help:"Remove a delegate"`
 }
 
-func newGmailDelegatesListCmd(flags *rootFlags) *cobra.Command {
-	return &cobra.Command{
-		Use:   "list",
-		Short: "List all delegates",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			u := ui.FromContext(cmd.Context())
-			account, err := requireAccount(flags)
-			if err != nil {
-				return err
-			}
+type GmailDelegatesListCmd struct{}
 
-			svc, err := newGmailService(cmd.Context(), account)
-			if err != nil {
-				return err
-			}
-
-			resp, err := svc.Users.Settings.Delegates.List("me").Do()
-			if err != nil {
-				return err
-			}
-
-			if outfmt.IsJSON(cmd.Context()) {
-				return outfmt.WriteJSON(os.Stdout, map[string]any{"delegates": resp.Delegates})
-			}
-
-			if len(resp.Delegates) == 0 {
-				u.Err().Println("No delegates")
-				return nil
-			}
-
-			tw := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
-			fmt.Fprintln(tw, "EMAIL\tSTATUS")
-			for _, d := range resp.Delegates {
-				fmt.Fprintf(tw, "%s\t%s\n",
-					d.DelegateEmail,
-					d.VerificationStatus)
-			}
-			_ = tw.Flush()
-			return nil
-		},
+func (c *GmailDelegatesListCmd) Run(ctx context.Context, flags *RootFlags) error {
+	svc, err := loadGmailSettingsService(ctx, flags)
+	if err != nil {
+		return err
 	}
+
+	resp, err := svc.Users.Settings.Delegates.List("me").Do()
+	if err != nil {
+		return err
+	}
+	rows := make([]gmailEmailStatusRow, 0, len(resp.Delegates))
+	for _, d := range resp.Delegates {
+		if d == nil {
+			continue
+		}
+		rows = append(rows, gmailEmailStatusRow{
+			Email:  d.DelegateEmail,
+			Status: d.VerificationStatus,
+		})
+	}
+	return writeGmailEmailStatusList(ctx, "delegates", resp.Delegates, "No delegates", rows)
 }
 
-func newGmailDelegatesGetCmd(flags *rootFlags) *cobra.Command {
-	return &cobra.Command{
-		Use:   "get <delegateEmail>",
-		Short: "Get a specific delegate's information",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			u := ui.FromContext(cmd.Context())
-			account, err := requireAccount(flags)
-			if err != nil {
-				return err
-			}
-
-			svc, err := newGmailService(cmd.Context(), account)
-			if err != nil {
-				return err
-			}
-
-			delegateEmail := args[0]
-			delegate, err := svc.Users.Settings.Delegates.Get("me", delegateEmail).Do()
-			if err != nil {
-				return err
-			}
-
-			if outfmt.IsJSON(cmd.Context()) {
-				return outfmt.WriteJSON(os.Stdout, map[string]any{"delegate": delegate})
-			}
-
-			u.Out().Printf("delegate_email\t%s", delegate.DelegateEmail)
-			u.Out().Printf("verification_status\t%s", delegate.VerificationStatus)
-			return nil
-		},
-	}
+type GmailDelegatesGetCmd struct {
+	DelegateEmail string `arg:"" name:"delegateEmail" help:"Delegate email"`
 }
 
-func newGmailDelegatesAddCmd(flags *rootFlags) *cobra.Command {
-	return &cobra.Command{
-		Use:   "add <delegateEmail>",
-		Short: "Add a delegate",
-		Long: `Add a delegate to your mailbox.
-
-The delegate will receive an email invitation that they must accept.
-Once accepted, they can read, send, and delete messages on your behalf.
-
-Note: This is a G Suite/Workspace feature and may not be available for personal Gmail accounts.`,
-		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			u := ui.FromContext(cmd.Context())
-			account, err := requireAccount(flags)
-			if err != nil {
-				return err
-			}
-
-			svc, err := newGmailService(cmd.Context(), account)
-			if err != nil {
-				return err
-			}
-
-			delegateEmail := args[0]
-			delegate := &gmail.Delegate{
-				DelegateEmail: delegateEmail,
-			}
-
-			created, err := svc.Users.Settings.Delegates.Create("me", delegate).Do()
-			if err != nil {
-				return err
-			}
-
-			if outfmt.IsJSON(cmd.Context()) {
-				return outfmt.WriteJSON(os.Stdout, map[string]any{"delegate": created})
-			}
-
-			u.Out().Println("Delegate added successfully")
-			u.Out().Printf("delegate_email\t%s", created.DelegateEmail)
-			u.Out().Printf("verification_status\t%s", created.VerificationStatus)
-			u.Out().Println("\nThe delegate will receive an invitation email that they must accept.")
-			return nil
-		},
+func (c *GmailDelegatesGetCmd) Run(ctx context.Context, flags *RootFlags) error {
+	svc, err := loadGmailSettingsService(ctx, flags)
+	if err != nil {
+		return err
 	}
+
+	delegateEmail := strings.TrimSpace(c.DelegateEmail)
+	if delegateEmail == "" {
+		return usage("empty delegateEmail")
+	}
+	delegate, err := svc.Users.Settings.Delegates.Get("me", delegateEmail).Do()
+	if err != nil {
+		return err
+	}
+	return writeGmailEmailStatusItem(ctx, "delegate", delegate, "delegate_email", gmailEmailStatusRow{
+		Email:  delegate.DelegateEmail,
+		Status: delegate.VerificationStatus,
+	})
 }
 
-func newGmailDelegatesRemoveCmd(flags *rootFlags) *cobra.Command {
-	return &cobra.Command{
-		Use:   "remove <delegateEmail>",
-		Short: "Remove a delegate",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			u := ui.FromContext(cmd.Context())
-			account, err := requireAccount(flags)
-			if err != nil {
-				return err
-			}
+type GmailDelegatesAddCmd struct {
+	DelegateEmail string `arg:"" name:"delegateEmail" help:"Delegate email"`
+}
 
-			svc, err := newGmailService(cmd.Context(), account)
-			if err != nil {
-				return err
-			}
-
-			delegateEmail := args[0]
-			err = svc.Users.Settings.Delegates.Delete("me", delegateEmail).Do()
-			if err != nil {
-				return err
-			}
-
-			if outfmt.IsJSON(cmd.Context()) {
-				return outfmt.WriteJSON(os.Stdout, map[string]any{
-					"success":       true,
-					"delegateEmail": delegateEmail,
-				})
-			}
-
-			u.Out().Printf("Delegate %s removed successfully", delegateEmail)
-			return nil
-		},
+func (c *GmailDelegatesAddCmd) Run(ctx context.Context, flags *RootFlags) error {
+	delegateEmail := strings.TrimSpace(c.DelegateEmail)
+	if delegateEmail == "" {
+		return usage("empty delegateEmail")
 	}
+
+	if err := dryRunExit(ctx, flags, "gmail.delegates.add", map[string]any{
+		"delegate_email": delegateEmail,
+	}); err != nil {
+		return err
+	}
+	if confirmErr := confirmDestructive(ctx, flags, fmt.Sprintf("add gmail delegate %s (grants mailbox read access)", delegateEmail)); confirmErr != nil {
+		return confirmErr
+	}
+
+	svc, err := loadGmailSettingsService(ctx, flags)
+	if err != nil {
+		return err
+	}
+
+	delegate := &gmail.Delegate{
+		DelegateEmail: delegateEmail,
+	}
+
+	created, err := svc.Users.Settings.Delegates.Create("me", delegate).Do()
+	if err != nil {
+		return err
+	}
+	return writeGmailEmailStatusCreateResult(
+		ctx,
+		"delegate",
+		created,
+		"delegate_email",
+		gmailEmailStatusRow{Email: created.DelegateEmail, Status: created.VerificationStatus},
+		"Delegate added successfully",
+		"",
+		"The delegate will receive an invitation email that they must accept.",
+	)
+}
+
+type GmailDelegatesRemoveCmd struct {
+	DelegateEmail string `arg:"" name:"delegateEmail" help:"Delegate email"`
+}
+
+func (c *GmailDelegatesRemoveCmd) Run(ctx context.Context, flags *RootFlags) error {
+	delegateEmail := strings.TrimSpace(c.DelegateEmail)
+	if delegateEmail == "" {
+		return usage("empty delegateEmail")
+	}
+
+	if confirmErr := confirmDestructive(ctx, flags, fmt.Sprintf("remove gmail delegate %s", delegateEmail)); confirmErr != nil {
+		return confirmErr
+	}
+
+	svc, err := loadGmailSettingsService(ctx, flags)
+	if err != nil {
+		return err
+	}
+
+	err = svc.Users.Settings.Delegates.Delete("me", delegateEmail).Do()
+	if err != nil {
+		return err
+	}
+
+	if outfmt.IsJSON(ctx) {
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+			"success":       true,
+			"delegateEmail": delegateEmail,
+		})
+	}
+
+	ui.FromContext(ctx).Out().Printf("Delegate %s removed successfully", delegateEmail)
+	return nil
 }

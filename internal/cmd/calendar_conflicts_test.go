@@ -16,7 +16,7 @@ func TestCalendarConflictsCmd_WithConflicts_JSON(t *testing.T) {
 	origNew := newCalendarService
 	t.Cleanup(func() { newCalendarService = origNew })
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(withPrimaryCalendar(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/freeBusy") && r.Method == http.MethodPost {
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]any{
@@ -42,7 +42,7 @@ func TestCalendarConflictsCmd_WithConflicts_JSON(t *testing.T) {
 			return
 		}
 		http.NotFound(w, r)
-	}))
+	})))
 	defer srv.Close()
 
 	svc, err := calendar.NewService(context.Background(),
@@ -103,7 +103,7 @@ func TestCalendarConflictsCmd_NoConflicts_JSON(t *testing.T) {
 	origNew := newCalendarService
 	t.Cleanup(func() { newCalendarService = origNew })
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(withPrimaryCalendar(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/freeBusy") && r.Method == http.MethodPost {
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]any{
@@ -129,7 +129,7 @@ func TestCalendarConflictsCmd_NoConflicts_JSON(t *testing.T) {
 			return
 		}
 		http.NotFound(w, r)
-	}))
+	})))
 	defer srv.Close()
 
 	svc, err := calendar.NewService(context.Background(),
@@ -176,7 +176,7 @@ func TestCalendarConflictsCmd_TableOutput(t *testing.T) {
 	origNew := newCalendarService
 	t.Cleanup(func() { newCalendarService = origNew })
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(withPrimaryCalendar(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/freeBusy") && r.Method == http.MethodPost {
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]any{
@@ -202,7 +202,7 @@ func TestCalendarConflictsCmd_TableOutput(t *testing.T) {
 			return
 		}
 		http.NotFound(w, r)
-	}))
+	})))
 	defer srv.Close()
 
 	svc, err := calendar.NewService(context.Background(),
@@ -251,7 +251,7 @@ func TestCalendarConflictsCmd_MultiCalendar(t *testing.T) {
 	origNew := newCalendarService
 	t.Cleanup(func() { newCalendarService = origNew })
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(withPrimaryCalendar(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/freeBusy") && r.Method == http.MethodPost {
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]any{
@@ -285,7 +285,7 @@ func TestCalendarConflictsCmd_MultiCalendar(t *testing.T) {
 			return
 		}
 		http.NotFound(w, r)
-	}))
+	})))
 	defer srv.Close()
 
 	svc, err := calendar.NewService(context.Background(),
@@ -348,7 +348,7 @@ func TestCalendarConflictsCmd_NoConflicts_TableOutput(t *testing.T) {
 	origNew := newCalendarService
 	t.Cleanup(func() { newCalendarService = origNew })
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(withPrimaryCalendar(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/freeBusy") && r.Method == http.MethodPost {
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]any{
@@ -364,7 +364,7 @@ func TestCalendarConflictsCmd_NoConflicts_TableOutput(t *testing.T) {
 			return
 		}
 		http.NotFound(w, r)
-	}))
+	})))
 	defer srv.Close()
 
 	svc, err := calendar.NewService(context.Background(),

@@ -8,13 +8,14 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"google.golang.org/api/gmail/v1"
 	"google.golang.org/api/option"
 )
 
 func TestFetchThreadDetails_Empty(t *testing.T) {
-	items, err := fetchThreadDetails(context.Background(), nil, nil, nil)
+	items, err := fetchThreadDetails(context.Background(), nil, nil, nil, false, time.UTC)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -75,7 +76,7 @@ func TestFetchThreadDetails_Concurrent(t *testing.T) {
 		"INBOX": "Inbox",
 	}
 
-	items, err := fetchThreadDetails(context.Background(), svc, threads, idToName)
+	items, err := fetchThreadDetails(context.Background(), svc, threads, idToName, false, time.UTC)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -107,6 +108,78 @@ func TestFetchThreadDetails_Concurrent(t *testing.T) {
 	}
 }
 
+func TestFetchThreadDetails_DateSelection(t *testing.T) {
+	mux := http.NewServeMux()
+	older := time.Date(2024, 1, 1, 10, 0, 0, 0, time.UTC)
+	newer := time.Date(2024, 1, 2, 9, 0, 0, 0, time.UTC)
+	mux.HandleFunc("/gmail/v1/users/me/threads/", func(w http.ResponseWriter, r *http.Request) {
+		response := fmt.Sprintf(`{
+			"id": "thread1",
+			"messages": [{
+				"id": "msg_new",
+				"internalDate": "%d",
+				"payload": {
+					"headers": [
+						{"name": "From", "value": "new@example.com"},
+						{"name": "Subject", "value": "New Subject"},
+						{"name": "Date", "value": "%s"}
+					]
+				}
+			}, {
+				"id": "msg_old",
+				"internalDate": "%d",
+				"payload": {
+					"headers": [
+						{"name": "From", "value": "old@example.com"},
+						{"name": "Subject", "value": "Old Subject"},
+						{"name": "Date", "value": "%s"}
+					]
+				}
+			}]
+		}`, newer.UnixMilli(), newer.Format(time.RFC1123Z), older.UnixMilli(), older.Format(time.RFC1123Z))
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(response))
+	})
+
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	svc, err := gmail.NewService(context.Background(),
+		option.WithEndpoint(server.URL),
+		option.WithHTTPClient(http.DefaultClient),
+	)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+
+	threads := []*gmail.Thread{{Id: "thread1"}}
+
+	itemsNewest, err := fetchThreadDetails(context.Background(), svc, threads, nil, false, time.UTC)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(itemsNewest) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(itemsNewest))
+	}
+	expectedNewest := formatGmailDateInLocation(newer.Format(time.RFC1123Z), time.UTC)
+	if itemsNewest[0].Date != expectedNewest {
+		t.Errorf("expected newest date %s, got %s", expectedNewest, itemsNewest[0].Date)
+	}
+
+	itemsOldest, err := fetchThreadDetails(context.Background(), svc, threads, nil, true, time.UTC)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(itemsOldest) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(itemsOldest))
+	}
+	expectedOldest := formatGmailDateInLocation(older.Format(time.RFC1123Z), time.UTC)
+	if itemsOldest[0].Date != expectedOldest {
+		t.Errorf("expected oldest date %s, got %s", expectedOldest, itemsOldest[0].Date)
+	}
+}
+
 func TestFetchThreadDetails_SkipsEmptyIDs(t *testing.T) {
 	mux := http.NewServeMux()
 	var callCount atomic.Int32
@@ -133,7 +206,7 @@ func TestFetchThreadDetails_SkipsEmptyIDs(t *testing.T) {
 		{Id: ""},        // Should be skipped
 	}
 
-	items, err := fetchThreadDetails(context.Background(), svc, threads, nil)
+	items, err := fetchThreadDetails(context.Background(), svc, threads, nil, false, time.UTC)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -176,7 +249,7 @@ func TestFetchThreadDetails_ContextCanceled(t *testing.T) {
 
 	threads := []*gmail.Thread{{Id: "thread1"}}
 
-	_, err := fetchThreadDetails(ctx, svc, threads, nil)
+	_, err := fetchThreadDetails(ctx, svc, threads, nil, false, time.UTC)
 	// Context was canceled, we may or may not get an error depending on timing.
 	// Either nil or context.Canceled is acceptable.
 	_ = err
