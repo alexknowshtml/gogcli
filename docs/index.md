@@ -45,7 +45,7 @@ gog slides create-from-markdown "Weekly update" --content-file slides.md
 ## Pick your path
 
 - **Trying it.** [Install](install.md) → [Quickstart](quickstart.md). Five minutes from `brew install` to your first authenticated query.
-- **Wiring up an agent.** [Safety Profiles](safety-profiles.md) and the bundled [`gog` agent skill](https://github.com/steipete/gogcli/blob/main/.agents/skills/gog/SKILL.md). Lock the binary down before handing it to a model.
+- **Wiring up an agent.** [Safety Profiles](safety-profiles.md) and the bundled [`gog` agent skill](https://github.com/openclaw/gogcli/blob/main/.agents/skills/gog/SKILL.md). Lock the binary down before handing it to a model.
 - **Running Workspace at scale.** [Auth Clients](auth-clients.md) for service accounts, named OAuth clients, and domain-wide delegation.
 - **Managing Workspace.** [Workspace Admin](workspace-admin.md) covers user creation, cleanup, organizational units, and group administration.
 - **Backing up an account.** [Backup](backup.md) before pointing `gog backup push` at a busy mailbox.
@@ -53,4 +53,4 @@ gog slides create-from-markdown "Weekly update" --content-file slides.md
 
 ## Project
 
-Active development; the [changelog](https://github.com/steipete/gogcli/blob/main/CHANGELOG.md) tracks what shipped recently. Goals and non-goals live in the [spec](spec.md). Released under the [MIT license](https://github.com/steipete/gogcli/blob/main/LICENSE). Not affiliated with Google.
+Active development; the [changelog](https://github.com/openclaw/gogcli/blob/main/CHANGELOG.md) tracks what shipped recently. Goals and non-goals live in the [spec](spec.md). Released under the [MIT license](https://github.com/openclaw/gogcli/blob/main/LICENSE). Not affiliated with Google.

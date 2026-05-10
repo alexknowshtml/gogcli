@@ -15,7 +15,7 @@ scripts/verify-release.sh X.Y.Z
 ```
 
 Assumptions:
-- Repo: `steipete/gogcli`
+- Repo: `openclaw/gogcli`
 - Tap repo: `../homebrew-tap` (tap: `steipete/tap`)
 - Homebrew formula name: `gogcli` (installs the `gog` binary)
 
@@ -81,14 +81,14 @@ In the tap repo (assumed sibling at `../homebrew-tap`), create/update `Formula/g
 
 Recommended formula shape (download GitHub release assets; preserves macOS code signature):
 - `version "X.Y.Z"`
-- `url "https://github.com/steipete/gogcli/releases/download/vX.Y.Z/gogcli_X.Y.Z_darwin_arm64.tar.gz"` (or `darwin_amd64`)
+- `url "https://github.com/openclaw/gogcli/releases/download/vX.Y.Z/gogcli_X.Y.Z_darwin_arm64.tar.gz"` (or `darwin_amd64`)
 - `sha256 "<sha256>"`
 - Install:
   - `bin.install "gog"`
 
 Alternative (build-from-source; macOS binary will be ad-hoc signed, which can trigger repeated Keychain prompts with `KeychainTrustApplication`):
 - `version "X.Y.Z"`
-- `url "https://github.com/steipete/gogcli/archive/refs/tags/vX.Y.Z.tar.gz"`
+- `url "https://github.com/openclaw/gogcli/archive/refs/tags/vX.Y.Z.tar.gz"`
 - `sha256 "<sha256>"`
 - `depends_on "go" => :build`
 - Build:
@@ -96,7 +96,7 @@ Alternative (build-from-source; macOS binary will be ad-hoc signed, which can tr
 
 Compute the SHA256 for the tag tarball:
 ```sh
-curl -L -o /tmp/gogcli.tar.gz https://github.com/steipete/gogcli/archive/refs/tags/vX.Y.Z.tar.gz
+curl -L -o /tmp/gogcli.tar.gz https://github.com/openclaw/gogcli/archive/refs/tags/vX.Y.Z.tar.gz
 shasum -a 256 /tmp/gogcli.tar.gz
 ```
 

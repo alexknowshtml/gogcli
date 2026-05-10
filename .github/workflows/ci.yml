@@ -73,7 +73,7 @@ jobs:
       - name: Test
         # Skip tests that depend on macOS Keychain / Linux keyring or Unix path semantics.
         # These are covered by ubuntu-latest and macos-latest jobs.
-        # See https://github.com/steipete/gogcli/issues/395
+        # See https://github.com/openclaw/gogcli/issues/395
         run: make test
         shell: bash
         env:

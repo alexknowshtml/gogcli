@@ -23,8 +23,8 @@ gog --version
 Release tags publish a non-root GitHub Container Registry image:
 
 ```bash
-docker run --rm ghcr.io/steipete/gogcli:latest version
-docker run --rm ghcr.io/steipete/gogcli:v0.15.0 version
+docker run --rm ghcr.io/openclaw/gogcli:latest version
+docker run --rm ghcr.io/openclaw/gogcli:v0.15.0 version
 ```
 
 Authenticated container runs should mount a persistent config directory and
@@ -37,7 +37,7 @@ docker run --rm -it \
   -e GOG_KEYRING_BACKEND=file \
   -e GOG_KEYRING_PASSWORD \
   -v gogcli-config:/home/gog/.config/gogcli \
-  ghcr.io/steipete/gogcli:latest \
+  ghcr.io/openclaw/gogcli:latest \
   auth add you@gmail.com --services gmail,calendar,drive
 ```
 
@@ -80,7 +80,7 @@ help when `gog auth doctor --check` already shows readable tokens in the shell.
 ## Windows
 
 Download the matching ZIP from the
-[latest release](https://github.com/steipete/gogcli/releases):
+[latest release](https://github.com/openclaw/gogcli/releases):
 
 - `gogcli_<version>_windows_amd64.zip`
 - `gogcli_<version>_windows_arm64.zip`
@@ -99,13 +99,13 @@ Release assets are uploaded by GoReleaser:
 - `gogcli_<version>_windows_arm64.zip`
 - `checksums.txt`
 
-Browse the [releases page](https://github.com/steipete/gogcli/releases) for
+Browse the [releases page](https://github.com/openclaw/gogcli/releases) for
 the latest tag and the full asset list.
 
 ## Build from source
 
 ```bash
-git clone https://github.com/steipete/gogcli.git
+git clone https://github.com/openclaw/gogcli.git
 cd gogcli
 make
 ./bin/gog --version
@@ -139,7 +139,7 @@ keyring health, refresh-token validity, and Workspace-specific failure modes.
 ## Updating
 
 - **Homebrew:** `brew upgrade gogcli`.
-- **Docker:** pull a new tag (`ghcr.io/steipete/gogcli:vX.Y.Z`).
+- **Docker:** pull a new tag (`ghcr.io/openclaw/gogcli:vX.Y.Z`).
 - **GitHub release archives:** download the new tarball/ZIP and replace the
   binary.
 - **Source builds:** `git pull && make` — the version string comes from

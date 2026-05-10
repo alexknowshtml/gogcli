@@ -26,7 +26,7 @@ gog --version
 ### Docker
 
 ```bash
-docker run --rm ghcr.io/steipete/gogcli:latest version
+docker run --rm ghcr.io/openclaw/gogcli:latest version
 ```
 
 Authenticated container runs should use a persistent config volume and the
@@ -39,7 +39,7 @@ docker run --rm -it \
   -e GOG_KEYRING_BACKEND=file \
   -e GOG_KEYRING_PASSWORD \
   -v gogcli-config:/home/gog/.config/gogcli \
-  ghcr.io/steipete/gogcli:latest \
+  ghcr.io/openclaw/gogcli:latest \
   auth add you@gmail.com --services gmail,calendar,drive
 ```
 
@@ -47,13 +47,13 @@ docker run --rm -it \
 
 Download `gogcli_<version>_windows_amd64.zip` or
 `gogcli_<version>_windows_arm64.zip` from the
-[latest release](https://github.com/steipete/gogcli/releases), extract
+[latest release](https://github.com/openclaw/gogcli/releases), extract
 `gog.exe`, and put that directory on `PATH`.
 
 ### Build from source
 
 ```bash
-git clone https://github.com/steipete/gogcli.git
+git clone https://github.com/openclaw/gogcli.git
 cd gogcli
 make
 ./bin/gog --version
