@@ -122,7 +122,9 @@ func (c *GmailDelegatesRemoveCmd) Run(ctx context.Context, flags *RootFlags) err
 		return usage("empty delegateEmail")
 	}
 
-	if confirmErr := confirmDestructive(ctx, flags, fmt.Sprintf("remove gmail delegate %s", delegateEmail)); confirmErr != nil {
+	if confirmErr := dryRunAndConfirmDestructive(ctx, flags, "gmail.delegates.remove", map[string]any{
+		"delegate_email": delegateEmail,
+	}, fmt.Sprintf("remove gmail delegate %s", delegateEmail)); confirmErr != nil {
 		return confirmErr
 	}
 

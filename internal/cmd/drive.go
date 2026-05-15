@@ -237,10 +237,6 @@ type DriveDeleteCmd struct {
 
 func (c *DriveDeleteCmd) Run(ctx context.Context, flags *RootFlags) error {
 	u := ui.FromContext(ctx)
-	account, err := requireAccount(flags)
-	if err != nil {
-		return err
-	}
 	fileID := strings.TrimSpace(c.FileID)
 	if fileID == "" {
 		return usage("empty fileId")
@@ -255,6 +251,11 @@ func (c *DriveDeleteCmd) Run(ctx context.Context, flags *RootFlags) error {
 		"permanent": c.Permanent,
 	}, fmt.Sprintf("%s %s", action, fileID)); confirmErr != nil {
 		return confirmErr
+	}
+
+	account, err := requireAccount(flags)
+	if err != nil {
+		return err
 	}
 
 	svc, err := newDriveService(ctx, account)

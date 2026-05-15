@@ -70,14 +70,44 @@ func TestDryRunE2E_MutatingCommandsSkipAuthAndAPI(t *testing.T) {
 			op:   "docs.find-replace",
 		},
 		{
+			name: "docs add tab",
+			args: []string{"docs", "add-tab", "doc123", "--title", "Tab 1"},
+			op:   "docs.add-tab",
+		},
+		{
+			name: "docs add child tab",
+			args: []string{"docs", "add-tab", "doc123", "--title", "Child", "--parent-tab", "Parent"},
+			op:   "docs.add-tab",
+		},
+		{
+			name: "docs rename tab",
+			args: []string{"docs", "rename-tab", "doc123", "--tab", "Old", "--title", "New"},
+			op:   "docs.rename-tab",
+		},
+		{
+			name: "docs delete tab",
+			args: []string{"docs", "delete-tab", "doc123", "--tab", "Old"},
+			op:   "docs.delete-tab",
+		},
+		{
 			name: "docs export tab",
 			args: []string{"docs", "export", "doc123", "--tab", "Tab 1", "--format", "pdf", "--out", "/tmp/gog-dryrun-tab.pdf"},
 			op:   "docs.tab-export",
 		},
 		{
+			name: "docs comments delete",
+			args: []string{"docs", "comments", "delete", "doc123", "comment123"},
+			op:   "docs.comments.delete",
+		},
+		{
 			name: "drive mkdir",
 			args: []string{"drive", "mkdir", "SmokeFolder", "--parent", "root"},
 			op:   "drive.mkdir",
+		},
+		{
+			name: "drive delete",
+			args: []string{"drive", "delete", "file123"},
+			op:   "drive.delete",
 		},
 		{
 			name: "drive move",
@@ -118,6 +148,26 @@ func TestDryRunE2E_MutatingCommandsSkipAuthAndAPI(t *testing.T) {
 			name: "drive changes stop",
 			args: []string{"drive", "changes", "stop", "channel123", "resource123"},
 			op:   "drive.changes.stop",
+		},
+		{
+			name: "drive comments delete",
+			args: []string{"drive", "comments", "delete", "file123", "comment123"},
+			op:   "drive.comments.delete",
+		},
+		{
+			name: "auth remove",
+			args: []string{"auth", "remove", "user@example.com"},
+			op:   "auth.remove",
+		},
+		{
+			name: "auth tokens delete",
+			args: []string{"auth", "tokens", "delete", "user@example.com"},
+			op:   "auth.tokens.delete",
+		},
+		{
+			name: "auth service account unset",
+			args: []string{"auth", "service-account", "unset", "user@example.com"},
+			op:   "auth.service_account.unset",
 		},
 		{
 			name: "admin groups members add",
@@ -220,6 +270,11 @@ func TestDryRunE2E_MutatingCommandsSkipAuthAndAPI(t *testing.T) {
 			op:   "gmail.labels.modify",
 		},
 		{
+			name: "gmail delegates remove",
+			args: []string{"gmail", "delegates", "remove", "delegate@example.com"},
+			op:   "gmail.delegates.remove",
+		},
+		{
 			name: "gmail batch delete",
 			args: []string{"gmail", "batch", "delete", "msg123", "msg456"},
 			op:   "gmail.batch.delete",
@@ -248,6 +303,11 @@ func TestDryRunE2E_MutatingCommandsSkipAuthAndAPI(t *testing.T) {
 			name: "gmail watch renew",
 			args: []string{"gmail", "watch", "renew", "--ttl", "1h"},
 			op:   "gmail.watch.renew",
+		},
+		{
+			name: "gmail watch stop",
+			args: []string{"gmail", "watch", "stop"},
+			op:   "gmail.watch.stop",
 		},
 		{
 			name: "keep delete",
@@ -308,6 +368,16 @@ func TestDryRunE2E_MutatingCommandsSkipAuthAndAPI(t *testing.T) {
 			name: "classroom invitations delete",
 			args: []string{"classroom", "invitations", "delete", "invitation123"},
 			op:   "classroom.invitations.delete",
+		},
+		{
+			name: "classroom guardians delete",
+			args: []string{"classroom", "guardians", "delete", "student@example.com", "guardian123"},
+			op:   "classroom.guardians.delete",
+		},
+		{
+			name: "contacts other delete",
+			args: []string{"contacts", "other", "delete", "otherContacts/c123"},
+			op:   "contacts.other.delete",
 		},
 		{
 			name: "meet update",
@@ -400,6 +470,11 @@ func TestDryRunE2E_MutatingCommandsSkipAuthAndAPI(t *testing.T) {
 			op:   "sheets.named_ranges.delete",
 		},
 		{
+			name: "sheets delete tab",
+			args: []string{"sheets", "delete-tab", "sheet123", "Sheet1"},
+			op:   "sheets.delete-tab",
+		},
+		{
 			name: "forms delete question",
 			args: []string{"forms", "delete-question", "form123", "0"},
 			op:   "forms.deleteQuestion",
@@ -422,14 +497,18 @@ func TestDryRunE2E_MutatingCommandsSkipAuthAndAPI(t *testing.T) {
 			}
 
 			var payload struct {
-				DryRun bool   `json:"dry_run"`
-				Op     string `json:"op"`
+				DryRun  bool            `json:"dry_run"`
+				Op      string          `json:"op"`
+				Request json.RawMessage `json:"request"`
 			}
 			if err := json.Unmarshal([]byte(out), &payload); err != nil {
 				t.Fatalf("decode dry-run output: %v\nout=%q", err, out)
 			}
 			if !payload.DryRun || payload.Op != tc.op {
 				t.Fatalf("unexpected dry-run output: %#v", payload)
+			}
+			if len(payload.Request) == 0 || string(payload.Request) == "null" {
+				t.Fatalf("dry-run output missing structured request: %s", out)
 			}
 		})
 	}

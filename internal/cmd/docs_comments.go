@@ -234,7 +234,10 @@ func (c *DocsCommentsDeleteCmd) Run(ctx context.Context, flags *RootFlags) error
 		return usage("empty commentId")
 	}
 
-	if confirmErr := confirmDestructive(ctx, flags, fmt.Sprintf("delete comment %s from doc %s", commentID, docID)); confirmErr != nil {
+	if confirmErr := dryRunAndConfirmDestructive(ctx, flags, "docs.comments.delete", map[string]any{
+		"doc_id":     docID,
+		"comment_id": commentID,
+	}, fmt.Sprintf("delete comment %s from doc %s", commentID, docID)); confirmErr != nil {
 		return confirmErr
 	}
 

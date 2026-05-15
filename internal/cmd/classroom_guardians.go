@@ -155,7 +155,10 @@ func (c *ClassroomGuardiansDeleteCmd) Run(ctx context.Context, flags *RootFlags)
 		return usage("empty guardianId")
 	}
 
-	if err := confirmDestructive(ctx, flags, fmt.Sprintf("delete guardian %s for student %s", guardianID, studentID)); err != nil {
+	if err := dryRunAndConfirmDestructive(ctx, flags, "classroom.guardians.delete", map[string]any{
+		"student_id":  studentID,
+		"guardian_id": guardianID,
+	}, fmt.Sprintf("delete guardian %s for student %s", guardianID, studentID)); err != nil {
 		return err
 	}
 

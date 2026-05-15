@@ -396,7 +396,9 @@ func (c *ContactsOtherDeleteCmd) Run(ctx context.Context, flags *RootFlags) erro
 		return usage("resourceName must start with otherContacts/")
 	}
 
-	if confirmErr := confirmDestructive(ctx, flags, fmt.Sprintf("delete other contact %s", resourceName)); confirmErr != nil {
+	if confirmErr := dryRunAndConfirmDestructive(ctx, flags, "contacts.other.delete", map[string]any{
+		"resource_name": resourceName,
+	}, fmt.Sprintf("delete other contact %s", resourceName)); confirmErr != nil {
 		return confirmErr
 	}
 

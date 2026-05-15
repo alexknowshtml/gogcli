@@ -28,11 +28,6 @@ func (c *DocsAddTabCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return usage("empty docId")
 	}
 
-	svc, err := requireDocsService(ctx, flags)
-	if err != nil {
-		return err
-	}
-
 	props := &docs.TabProperties{}
 	if title := strings.TrimSpace(c.Title); title != "" {
 		props.Title = title
@@ -44,22 +39,29 @@ func (c *DocsAddTabCmd) Run(ctx context.Context, flags *RootFlags) error {
 	if emoji := strings.TrimSpace(c.IconEmoji); emoji != "" {
 		props.IconEmoji = emoji
 	}
-	if parent := strings.TrimSpace(c.ParentTab); parent != "" {
-		parentID, parentErr := docsResolveTabID(ctx, svc, docID, parent)
-		if parentErr != nil {
-			return parentErr
-		}
-		props.ParentTabId = parentID
-	}
+	parentQuery := strings.TrimSpace(c.ParentTab)
 
 	if dryRunErr := dryRunExit(ctx, flags, "docs.add-tab", map[string]any{
 		"doc_id":     docID,
 		"title":      props.Title,
 		"index":      c.Index,
-		"parent_tab": props.ParentTabId,
+		"parent_tab": parentQuery,
 		"icon_emoji": props.IconEmoji,
 	}); dryRunErr != nil {
 		return dryRunErr
+	}
+
+	svc, err := requireDocsService(ctx, flags)
+	if err != nil {
+		return err
+	}
+
+	if parent := parentQuery; parent != "" {
+		parentID, parentErr := docsResolveTabID(ctx, svc, docID, parent)
+		if parentErr != nil {
+			return parentErr
+		}
+		props.ParentTabId = parentID
 	}
 
 	resp, err := svc.Documents.BatchUpdate(docID, &docs.BatchUpdateDocumentRequest{
@@ -128,6 +130,14 @@ func (c *DocsRenameTabCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return usage("empty --title")
 	}
 
+	if dryRunErr := dryRunExit(ctx, flags, "docs.rename-tab", map[string]any{
+		"doc_id": docID,
+		"tab":    tabQuery,
+		"title":  newTitle,
+	}); dryRunErr != nil {
+		return dryRunErr
+	}
+
 	svc, err := requireDocsService(ctx, flags)
 	if err != nil {
 		return err
@@ -135,14 +145,6 @@ func (c *DocsRenameTabCmd) Run(ctx context.Context, flags *RootFlags) error {
 	resolved, err := docsResolveTab(ctx, svc, docID, tabQuery)
 	if err != nil {
 		return err
-	}
-
-	if dryRunErr := dryRunExit(ctx, flags, "docs.rename-tab", map[string]any{
-		"doc_id": docID,
-		"tab_id": resolved.TabProperties.TabId,
-		"title":  newTitle,
-	}); dryRunErr != nil {
-		return dryRunErr
 	}
 
 	resp, err := svc.Documents.BatchUpdate(docID, &docs.BatchUpdateDocumentRequest{
@@ -199,6 +201,13 @@ func (c *DocsDeleteTabCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return usage("empty --tab")
 	}
 
+	if err := dryRunAndConfirmDestructive(ctx, flags, "docs.delete-tab", map[string]any{
+		"doc_id": docID,
+		"tab":    tabQuery,
+	}, fmt.Sprintf("delete tab %s from doc %s", tabQuery, docID)); err != nil {
+		return err
+	}
+
 	svc, err := requireDocsService(ctx, flags)
 	if err != nil {
 		return err
@@ -206,16 +215,6 @@ func (c *DocsDeleteTabCmd) Run(ctx context.Context, flags *RootFlags) error {
 	resolved, err := docsResolveTab(ctx, svc, docID, tabQuery)
 	if err != nil {
 		return err
-	}
-
-	if confirmErr := confirmDestructive(ctx, flags, fmt.Sprintf("delete tab %s from doc %s", resolved.TabProperties.TabId, docID)); confirmErr != nil {
-		return confirmErr
-	}
-	if dryRunErr := dryRunExit(ctx, flags, "docs.delete-tab", map[string]any{
-		"doc_id": docID,
-		"tab_id": resolved.TabProperties.TabId,
-	}); dryRunErr != nil {
-		return dryRunErr
 	}
 
 	resp, err := svc.Documents.BatchUpdate(docID, &docs.BatchUpdateDocumentRequest{

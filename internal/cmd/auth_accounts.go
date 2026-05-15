@@ -215,7 +215,9 @@ func (c *AuthRemoveCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return usage("empty email")
 	}
 
-	if err := confirmDestructive(ctx, flags, fmt.Sprintf("remove stored token for %s", email)); err != nil {
+	if err := dryRunAndConfirmDestructive(ctx, flags, "auth.remove", map[string]any{
+		"email": email,
+	}, fmt.Sprintf("remove stored token for %s", email)); err != nil {
 		return err
 	}
 	store, err := openSecretsStore()

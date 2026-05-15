@@ -185,7 +185,9 @@ type GmailWatchStopCmd struct{}
 func (c *GmailWatchStopCmd) Run(ctx context.Context, flags *RootFlags) error {
 	u := ui.FromContext(ctx)
 
-	if confirmErr := confirmDestructive(ctx, flags, "stop gmail watch and clear stored state"); confirmErr != nil {
+	if confirmErr := dryRunAndConfirmDestructive(ctx, flags, "gmail.watch.stop", map[string]any{
+		"clear_state": true,
+	}, "stop gmail watch and clear stored state"); confirmErr != nil {
 		return confirmErr
 	}
 

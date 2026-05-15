@@ -202,6 +202,13 @@ func (c *SheetsDeleteTabCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return usage("empty tabName")
 	}
 
+	if err := dryRunExit(ctx, flags, "sheets.delete-tab", map[string]any{
+		"spreadsheet_id": spreadsheetID,
+		"tab_name":       tabName,
+	}); err != nil {
+		return err
+	}
+
 	account, err := requireAccount(flags)
 	if err != nil {
 		return err
@@ -221,12 +228,7 @@ func (c *SheetsDeleteTabCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return usagef("unknown tab %q", tabName)
 	}
 
-	payload := map[string]any{
-		"spreadsheet_id": spreadsheetID,
-		"tab_name":       tabName,
-		"sheet_id":       sheetID,
-	}
-	if err := dryRunAndConfirmDestructive(ctx, flags, "sheets.delete-tab", payload, fmt.Sprintf("delete sheet tab %s", tabName)); err != nil {
+	if err := confirmDestructiveChecked(ctx, flags, fmt.Sprintf("delete sheet tab %s", tabName)); err != nil {
 		return err
 	}
 

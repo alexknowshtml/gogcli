@@ -129,7 +129,9 @@ func (c *AuthServiceAccountUnsetCmd) Run(ctx context.Context, flags *RootFlags) 
 		return usage("empty email")
 	}
 
-	if err := confirmDestructive(ctx, flags, fmt.Sprintf("remove stored service account for %s", email)); err != nil {
+	if err := dryRunAndConfirmDestructive(ctx, flags, "auth.service_account.unset", map[string]any{
+		"email": email,
+	}, fmt.Sprintf("remove stored service account for %s", email)); err != nil {
 		return err
 	}
 

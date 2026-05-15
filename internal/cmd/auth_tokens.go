@@ -89,7 +89,9 @@ func (c *AuthTokensDeleteCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return usage("empty email")
 	}
 
-	if err := confirmDestructive(ctx, flags, fmt.Sprintf("delete stored token for %s", email)); err != nil {
+	if err := dryRunAndConfirmDestructive(ctx, flags, "auth.tokens.delete", map[string]any{
+		"email": email,
+	}, fmt.Sprintf("delete stored token for %s", email)); err != nil {
 		return err
 	}
 

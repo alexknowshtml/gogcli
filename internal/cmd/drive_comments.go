@@ -183,7 +183,10 @@ func (c *DriveCommentsDeleteCmd) Run(ctx context.Context, flags *RootFlags) erro
 		return usage("empty commentId")
 	}
 
-	if confirmErr := confirmDestructive(ctx, flags, fmt.Sprintf("delete comment %s from file %s", commentID, fileID)); confirmErr != nil {
+	if confirmErr := dryRunAndConfirmDestructive(ctx, flags, "drive.comments.delete", map[string]any{
+		"file_id":    fileID,
+		"comment_id": commentID,
+	}, fmt.Sprintf("delete comment %s from file %s", commentID, fileID)); confirmErr != nil {
 		return confirmErr
 	}
 
