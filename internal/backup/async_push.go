@@ -49,6 +49,7 @@ func enqueueAsyncPush(ctx context.Context, cfg Config, opts Options, sha string,
 		if pusher.err != nil {
 			err := pusher.err
 			pusher.mu.Unlock()
+			forgetAsyncPusher(cfg.Repo, pusher)
 			return err
 		}
 		if len(pusher.queue) < limit {
@@ -80,6 +81,7 @@ func waitAsyncPushes(ctx context.Context, repo string, progress func(format stri
 		if pusher.err != nil {
 			err := pusher.err
 			pusher.mu.Unlock()
+			forgetAsyncPusher(repo, pusher)
 			return err
 		}
 		done := len(pusher.queue) == 0 && !pusher.pushing
@@ -138,6 +140,15 @@ func existingAsyncPusher(repo string, progress func(format string, args ...any))
 	return pusher
 }
 
+func forgetAsyncPusher(repo string, pusher *asyncRepoPusher) {
+	asyncPushers.mu.Lock()
+	defer asyncPushers.mu.Unlock()
+	repo = strings.TrimSpace(repo)
+	if asyncPushers.m[repo] == pusher {
+		delete(asyncPushers.m, repo)
+	}
+}
+
 func (p *asyncRepoPusher) run(ctx context.Context) {
 	for {
 		p.mu.Lock()
@@ -148,7 +159,7 @@ func (p *asyncRepoPusher) run(ctx context.Context) {
 			p.queue = nil
 			p.cond.Broadcast()
 			p.mu.Unlock()
-			continue
+			return
 		}
 		job := p.queue[0]
 		p.queue = p.queue[1:]
@@ -165,6 +176,9 @@ func (p *asyncRepoPusher) run(ctx context.Context) {
 		if err != nil {
 			p.err = err
 			p.progressf("backup git push\terror\tsha=%s\terr=%q", shortSHA(job.sha), err.Error())
+			p.cond.Broadcast()
+			p.mu.Unlock()
+			return
 		} else {
 			p.progressf("backup git push\tdone\tsha=%s", shortSHA(job.sha))
 		}
@@ -245,9 +259,12 @@ func asyncPushError(repo string) error {
 		return nil
 	}
 	pusher.mu.Lock()
-	defer pusher.mu.Unlock()
 	if pusher.err == nil {
+		pusher.mu.Unlock()
 		return nil
 	}
-	return fmt.Errorf("async backup push failed: %w", pusher.err)
+	err := pusher.err
+	pusher.mu.Unlock()
+	forgetAsyncPusher(repo, pusher)
+	return fmt.Errorf("async backup push failed: %w", err)
 }

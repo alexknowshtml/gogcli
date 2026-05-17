@@ -34,3 +34,54 @@ func TestAsyncPusherProgressCanBeUpdated(t *testing.T) {
 		t.Fatalf("unexpected progress calls: %#v", got)
 	}
 }
+
+func TestAsyncPushErrorEvictsFailedPusher(t *testing.T) {
+	repo := t.TempDir()
+	wantErr := errors.New("push failed")
+	p := &asyncRepoPusher{err: wantErr}
+
+	asyncPushers.mu.Lock()
+	oldPushers := asyncPushers.m
+	asyncPushers.m = map[string]*asyncRepoPusher{repo: p}
+	asyncPushers.mu.Unlock()
+	t.Cleanup(func() {
+		asyncPushers.mu.Lock()
+		asyncPushers.m = oldPushers
+		asyncPushers.mu.Unlock()
+	})
+
+	err := asyncPushError(repo)
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("expected push error, got %v", err)
+	}
+	if existingAsyncPusher(repo, nil) != nil {
+		t.Fatalf("expected failed pusher to be evicted")
+	}
+	if err := asyncPushError(repo); err != nil {
+		t.Fatalf("expected second error check to be clear, got %v", err)
+	}
+}
+
+func TestEnqueueAsyncPushEvictsFailedPusher(t *testing.T) {
+	repo := t.TempDir()
+	wantErr := errors.New("push failed")
+	p := &asyncRepoPusher{err: wantErr}
+
+	asyncPushers.mu.Lock()
+	oldPushers := asyncPushers.m
+	asyncPushers.m = map[string]*asyncRepoPusher{repo: p}
+	asyncPushers.mu.Unlock()
+	t.Cleanup(func() {
+		asyncPushers.mu.Lock()
+		asyncPushers.m = oldPushers
+		asyncPushers.mu.Unlock()
+	})
+
+	err := enqueueAsyncPush(context.Background(), Config{Repo: repo}, Options{}, "abc", "msg")
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("expected push error, got %v", err)
+	}
+	if existingAsyncPusher(repo, nil) != nil {
+		t.Fatalf("expected failed pusher to be evicted")
+	}
+}
