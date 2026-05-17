@@ -17,6 +17,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	appconfig "github.com/steipete/gogcli/internal/config"
 )
 
 const formatVersion = 1
@@ -730,7 +732,7 @@ func writeCheckpointManifest(repo, rel string, manifest CheckpointManifest) erro
 		return err
 	}
 	data = append(data, '\n')
-	return os.WriteFile(full, data, 0o600)
+	return appconfig.WriteFileAtomic(full, data, 0o600)
 }
 
 func resolveCheckpointManifestPath(repo, rel string) (string, error) {
@@ -760,7 +762,7 @@ func writeManifest(repo string, manifest Manifest) error {
 		return err
 	}
 	data = append(data, '\n')
-	return os.WriteFile(path, data, 0o600)
+	return appconfig.WriteFileAtomic(path, data, 0o600)
 }
 
 func rejectSymlinkPath(root, full string) error {

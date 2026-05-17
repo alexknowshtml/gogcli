@@ -101,7 +101,7 @@ func writeConfigFile(cfg File) error {
 
 	b = append(b, '\n')
 
-	if err := writeFileAtomic(path, b, 0o600); err != nil {
+	if err := WriteFileAtomic(path, b, 0o600); err != nil {
 		return fmt.Errorf("write config: %w", err)
 	}
 
@@ -127,7 +127,8 @@ func UpdateConfig(update func(*File) error) error {
 	return writeConfigFile(cfg)
 }
 
-func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
+// WriteFileAtomic writes data to path via a same-directory temp file and rename.
+func WriteFileAtomic(path string, data []byte, perm os.FileMode) error {
 	dir := filepath.Dir(path)
 
 	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".*.tmp")

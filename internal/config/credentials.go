@@ -70,7 +70,7 @@ func WriteClientCredentialsFor(client string, c ClientCredentials) error {
 
 	b = append(b, '\n')
 
-	if err := writeFileAtomic(path, b, 0o600); err != nil {
+	if err := WriteFileAtomic(path, b, 0o600); err != nil {
 		return fmt.Errorf("write credentials: %w", err)
 	}
 

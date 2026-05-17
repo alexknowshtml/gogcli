@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	appconfig "github.com/steipete/gogcli/internal/config"
 )
 
 const (
@@ -81,7 +83,7 @@ func SaveConfig(path string, cfg Config) error {
 		return err
 	}
 	data = append(data, '\n')
-	return os.WriteFile(path, data, 0o600)
+	return appconfig.WriteFileAtomic(path, data, 0o600)
 }
 
 func ResolveOptions(opts Options) (Config, error) {
