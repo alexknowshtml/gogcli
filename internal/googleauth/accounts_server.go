@@ -200,6 +200,11 @@ func (ms *ManageServer) handleAccountsPage(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
 	tmpl, err := template.New("accounts").Parse(accountsTemplate)
@@ -259,6 +264,16 @@ func (ms *ManageServer) handleListAccounts(w http.ResponseWriter, r *http.Reques
 }
 
 func (ms *ManageServer) handleAuthStart(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if !ms.validQueryCSRF(r) {
+		http.Error(w, "Invalid CSRF token", http.StatusForbidden)
+		return
+	}
+
 	creds, err := readClientCredentials(ms.client)
 	if err != nil {
 		http.Error(w, "OAuth credentials not configured. Run: gog auth credentials <file>", http.StatusInternalServerError)
@@ -297,6 +312,16 @@ func (ms *ManageServer) handleAuthStart(w http.ResponseWriter, r *http.Request) 
 
 func (ms *ManageServer) handleAuthUpgrade(w http.ResponseWriter, r *http.Request) {
 	// Similar to handleAuthStart, but always forces consent to get new scopes
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if !ms.validQueryCSRF(r) {
+		http.Error(w, "Invalid CSRF token", http.StatusForbidden)
+		return
+	}
+
 	email := r.URL.Query().Get("email")
 	if email == "" {
 		http.Error(w, "Missing email parameter", http.StatusBadRequest)
@@ -491,7 +516,7 @@ func (ms *ManageServer) handleOAuthCallback(w http.ResponseWriter, r *http.Reque
 
 	// Render success page with the new template
 	w.WriteHeader(http.StatusOK)
-	renderSuccessPageWithDetails(w, email, serviceNames)
+	renderSuccessPageWithDetailsAndCSRF(w, email, serviceNames, ms.csrfToken)
 }
 
 func (ms *ManageServer) handleSetDefault(w http.ResponseWriter, r *http.Request) {
@@ -562,6 +587,10 @@ func (ms *ManageServer) handleRemoveAccount(w http.ResponseWriter, r *http.Reque
 	}
 
 	writeJSON(w, map[string]any{"success": true})
+}
+
+func (ms *ManageServer) validQueryCSRF(r *http.Request) bool {
+	return ms.csrfToken != "" && r.URL.Query().Get("csrf") == ms.csrfToken
 }
 
 type defaultAccountDeleter interface {
@@ -824,6 +853,10 @@ func writeJSONError(w http.ResponseWriter, msg string, status int) {
 
 // renderSuccessPageWithDetails renders the success template with email and services
 func renderSuccessPageWithDetails(w http.ResponseWriter, email string, services []string) {
+	renderSuccessPageWithDetailsAndCSRF(w, email, services, "")
+}
+
+func renderSuccessPageWithDetailsAndCSRF(w http.ResponseWriter, email string, services []string, csrfToken string) {
 	tmpl, err := template.New("success").Parse(successTemplate)
 	if err != nil {
 		_, _ = w.Write([]byte("Success! You can close this window."))
@@ -843,6 +876,7 @@ func renderSuccessPageWithDetails(w http.ResponseWriter, email string, services 
 		Services:         services,
 		AllServices:      allServices,
 		CountdownSeconds: postSuccessDisplaySeconds,
+		CSRFToken:        csrfToken,
 	}
 	_ = tmpl.Execute(w, data)
 }

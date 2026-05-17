@@ -35,6 +35,14 @@ func TestHandleAccountsPage(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
+	req = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/", nil)
+	ms.handleAccountsPage(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405 for bad method, got %d", rec.Code)
+	}
+
+	rec = httptest.NewRecorder()
 	req = httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/nope", nil)
 	ms.handleAccountsPage(rec, req)
 

@@ -865,13 +865,13 @@
 
         function addAccount() {
             // Redirect to OAuth flow
-            window.location.href = '/auth/start';
+            window.location.href = '/auth/start?csrf=' + encodeURIComponent(csrfToken);
         }
 
         function upgradePermissions(email, event) {
             event.stopPropagation();
             // Redirect to OAuth flow with force consent to get all permissions
-            window.location.href = '/auth/upgrade?email=' + encodeURIComponent(email);
+            window.location.href = '/auth/upgrade?email=' + encodeURIComponent(email) + '&csrf=' + encodeURIComponent(csrfToken);
         }
 
         async function setDefault(email) {

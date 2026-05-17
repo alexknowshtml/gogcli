@@ -49,6 +49,7 @@ type successTemplateData struct {
 	Services         []string
 	AllServices      []string
 	CountdownSeconds int
+	CSRFToken        string
 }
 
 var (

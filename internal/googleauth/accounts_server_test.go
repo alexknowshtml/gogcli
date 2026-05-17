@@ -149,6 +149,10 @@ func TestManageServer_HandleAccountsPage(t *testing.T) {
 
 			t.Fatalf("expected rendered token, body excerpt=%q", excerpt)
 		}
+
+		if !strings.Contains(body, "/auth/start?csrf=") || !strings.Contains(body, "&csrf=") {
+			t.Fatalf("expected csrf token in auth redirect URLs")
+		}
 	}
 }
 
@@ -550,9 +554,9 @@ func TestManageServer_HandleAuthStart(t *testing.T) {
 
 	t.Cleanup(func() { _ = ln.Close() })
 
-	ms := &ManageServer{listener: ln}
+	ms := &ManageServer{listener: ln, csrfToken: "csrf"}
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/auth/start", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/auth/start?csrf=csrf", nil)
 	ms.handleAuthStart(rr, req)
 
 	if rr.Code != http.StatusFound {
@@ -629,11 +633,12 @@ func TestManageServer_HandleAuthStart_RedirectURIOverride(t *testing.T) {
 	t.Cleanup(func() { _ = ln.Close() })
 
 	ms := &ManageServer{
-		listener: ln,
-		opts:     ManageServerOptions{RedirectURI: "https://gog.example.com/oauth2/callback"},
+		listener:  ln,
+		csrfToken: "csrf",
+		opts:      ManageServerOptions{RedirectURI: "https://gog.example.com/oauth2/callback"},
 	}
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/auth/start", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/auth/start?csrf=csrf", nil)
 	ms.handleAuthStart(rr, req)
 
 	loc := rr.Header().Get("Location")
@@ -658,12 +663,39 @@ func TestManageServer_HandleAuthStart_CredentialsError(t *testing.T) {
 	}
 
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/auth/start", nil)
-	ms := &ManageServer{}
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/auth/start?csrf=csrf", nil)
+	ms := &ManageServer{csrfToken: "csrf"}
 	ms.handleAuthStart(rr, req)
 
 	if rr.Code != http.StatusInternalServerError {
 		t.Fatalf("status: %d", rr.Code)
+	}
+}
+
+func TestManageServer_HandleAuthStart_RejectsBadRequest(t *testing.T) {
+	ms := &ManageServer{csrfToken: "csrf"}
+
+	tests := []struct {
+		name   string
+		method string
+		target string
+		want   int
+	}{
+		{name: "bad method", method: http.MethodPost, target: "/auth/start?csrf=csrf", want: http.StatusMethodNotAllowed},
+		{name: "missing csrf", method: http.MethodGet, target: "/auth/start", want: http.StatusForbidden},
+		{name: "bad csrf", method: http.MethodGet, target: "/auth/start?csrf=bad", want: http.StatusForbidden},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			rr := httptest.NewRecorder()
+			req := httptest.NewRequestWithContext(context.Background(), tc.method, tc.target, nil)
+			ms.handleAuthStart(rr, req)
+
+			if rr.Code != tc.want {
+				t.Fatalf("expected %d, got %d", tc.want, rr.Code)
+			}
+		})
 	}
 }
 
@@ -1160,11 +1192,12 @@ func TestManageServer_HandleAuthUpgrade(t *testing.T) {
 	t.Cleanup(func() { _ = ln.Close() })
 
 	ms := &ManageServer{
-		listener: ln,
-		opts:     ManageServerOptions{Services: []Service{ServiceGmail}},
+		listener:  ln,
+		csrfToken: "csrf",
+		opts:      ManageServerOptions{Services: []Service{ServiceGmail}},
 	}
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/auth/upgrade?email=test@example.com", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/auth/upgrade?email=test@example.com&csrf=csrf", nil)
 	ms.handleAuthUpgrade(rr, req)
 
 	if rr.Code != http.StatusFound {
@@ -1224,9 +1257,9 @@ func TestManageServer_HandleAuthUpgrade(t *testing.T) {
 }
 
 func TestManageServer_HandleAuthUpgrade_MissingEmail(t *testing.T) {
-	ms := &ManageServer{}
+	ms := &ManageServer{csrfToken: "csrf"}
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/auth/upgrade", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/auth/upgrade?csrf=csrf", nil)
 	ms.handleAuthUpgrade(rr, req)
 
 	if rr.Code != http.StatusBadRequest {
@@ -1244,11 +1277,38 @@ func TestManageServer_HandleAuthUpgrade_CredentialsError(t *testing.T) {
 	}
 
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/auth/upgrade?email=test@example.com", nil)
-	ms := &ManageServer{}
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/auth/upgrade?email=test@example.com&csrf=csrf", nil)
+	ms := &ManageServer{csrfToken: "csrf"}
 	ms.handleAuthUpgrade(rr, req)
 
 	if rr.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d", rr.Code)
+	}
+}
+
+func TestManageServer_HandleAuthUpgrade_RejectsBadRequest(t *testing.T) {
+	ms := &ManageServer{csrfToken: "csrf"}
+
+	tests := []struct {
+		name   string
+		method string
+		target string
+		want   int
+	}{
+		{name: "bad method", method: http.MethodPost, target: "/auth/upgrade?email=test@example.com&csrf=csrf", want: http.StatusMethodNotAllowed},
+		{name: "missing csrf", method: http.MethodGet, target: "/auth/upgrade?email=test@example.com", want: http.StatusForbidden},
+		{name: "bad csrf", method: http.MethodGet, target: "/auth/upgrade?email=test@example.com&csrf=bad", want: http.StatusForbidden},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			rr := httptest.NewRecorder()
+			req := httptest.NewRequestWithContext(context.Background(), tc.method, tc.target, nil)
+			ms.handleAuthUpgrade(rr, req)
+
+			if rr.Code != tc.want {
+				t.Fatalf("expected %d, got %d", tc.want, rr.Code)
+			}
+		})
 	}
 }
