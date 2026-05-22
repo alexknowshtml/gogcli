@@ -4,6 +4,7 @@ package secrets
 
 import (
 	"errors"
+	"fmt"
 	"os"
 
 	"golang.org/x/sys/windows"
@@ -16,12 +17,18 @@ func lockKeyringFile(file *os.File, exclusive bool) error {
 	}
 
 	var overlapped windows.Overlapped
-	return windows.LockFileEx(windows.Handle(file.Fd()), flags, 0, 1, 0, &overlapped)
+	if err := windows.LockFileEx(windows.Handle(file.Fd()), flags, 0, 1, 0, &overlapped); err != nil {
+		return fmt.Errorf("lock keyring file: %w", err)
+	}
+	return nil
 }
 
 func unlockKeyringFile(file *os.File) error {
 	var overlapped windows.Overlapped
-	return windows.UnlockFileEx(windows.Handle(file.Fd()), 0, 1, 0, &overlapped)
+	if err := windows.UnlockFileEx(windows.Handle(file.Fd()), 0, 1, 0, &overlapped); err != nil {
+		return fmt.Errorf("unlock keyring file: %w", err)
+	}
+	return nil
 }
 
 func keyringLockWouldBlock(err error) bool {
