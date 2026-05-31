@@ -12,6 +12,7 @@ import (
 	"google.golang.org/api/option"
 	"google.golang.org/api/sheets/v4"
 
+	"github.com/steipete/gogcli/internal/outfmt"
 	"github.com/steipete/gogcli/internal/ui"
 )
 
@@ -61,6 +62,64 @@ func TestSheetsGet_ValidationAndNoData(t *testing.T) {
 	cmd := &SheetsGetCmd{SpreadsheetID: "s1", Range: "Sheet1!A1:B2", MajorDimension: "ROWS", ValueRenderOption: "FORMATTED_VALUE"}
 	if err := cmd.Run(ctx, flags); err != nil {
 		t.Fatalf("get: %v", err)
+	}
+}
+
+func TestSheetsGet_JSONEmptyValuesArray(t *testing.T) {
+	u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
+	if uiErr != nil {
+		t.Fatalf("ui.New: %v", uiErr)
+	}
+	ctx := outfmt.WithMode(ui.WithUI(context.Background(), u), outfmt.Mode{JSON: true})
+	flags := &RootFlags{Account: "a@b.com", JSON: true}
+
+	origNew := newSheetsService
+	t.Cleanup(func() { newSheetsService = origNew })
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/sheets/v4")
+		path = strings.TrimPrefix(path, "/v4")
+		if strings.Contains(path, "/spreadsheets/s1/values/") && r.Method == http.MethodGet {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"range": "Sheet1!Z999"})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+
+	svc, err := sheets.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(srv.Client()),
+		option.WithEndpoint(srv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	newSheetsService = func(context.Context, string) (*sheets.Service, error) { return svc, nil }
+
+	cmd := &SheetsGetCmd{SpreadsheetID: "s1", Range: "Sheet1!Z999"}
+	out := captureStdout(t, func() {
+		if err := cmd.Run(ctx, flags); err != nil {
+			t.Fatalf("get: %v", err)
+		}
+	})
+
+	var parsed struct {
+		Range  string            `json:"range"`
+		Values []json.RawMessage `json:"values"`
+	}
+	if err := json.Unmarshal([]byte(out), &parsed); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if parsed.Range != "Sheet1!Z999" {
+		t.Fatalf("range = %q", parsed.Range)
+	}
+	if parsed.Values == nil {
+		t.Fatalf("values must be an empty array, got nil: %s", out)
+	}
+	if len(parsed.Values) != 0 {
+		t.Fatalf("values len = %d, want 0", len(parsed.Values))
 	}
 }
 

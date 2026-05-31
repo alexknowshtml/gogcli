@@ -166,7 +166,8 @@ func (c *GmailFiltersExportCmd) Run(ctx context.Context, flags *RootFlags) error
 		}
 	}
 
-	payload := map[string]any{"filters": resp.Filter}
+	filters := normalizeGmailFilters(resp.Filter)
+	payload := map[string]any{"filters": filters}
 	var data []byte
 	switch format {
 	case "json":
@@ -183,7 +184,7 @@ func (c *GmailFiltersExportCmd) Run(ctx context.Context, flags *RootFlags) error
 		if labelErr != nil {
 			return labelErr
 		}
-		data, err = marshalGmailFiltersXML(account, resp.Filter, labelNames)
+		data, err = marshalGmailFiltersXML(account, filters, labelNames)
 		if err != nil {
 			return err
 		}
@@ -213,11 +214,11 @@ func (c *GmailFiltersExportCmd) Run(ctx context.Context, flags *RootFlags) error
 		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"exported": true,
 			"path":     outPath,
-			"count":    len(resp.Filter),
+			"count":    len(filters),
 			"format":   format,
 		})
 	}
 
-	ui.FromContext(ctx).Out().Linef("Exported %d filters to %s", len(resp.Filter), outPath)
+	ui.FromContext(ctx).Out().Linef("Exported %d filters to %s", len(filters), outPath)
 	return nil
 }

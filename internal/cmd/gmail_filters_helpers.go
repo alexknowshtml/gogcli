@@ -38,6 +38,7 @@ var sleepBeforeGmailFilterRetry = func(ctx context.Context, d time.Duration) err
 }
 
 func writeGmailFiltersList(ctx context.Context, filters []*gmail.Filter) error {
+	filters = normalizeGmailFilters(filters)
 	if outfmt.IsJSON(ctx) {
 		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"filters": filters})
 	}
@@ -70,6 +71,13 @@ func writeGmailFiltersList(ctx context.Context, filters []*gmail.Filter) error {
 			sanitizeTab(query))
 	}
 	return tw.Flush()
+}
+
+func normalizeGmailFilters(filters []*gmail.Filter) []*gmail.Filter {
+	if filters == nil {
+		return []*gmail.Filter{}
+	}
+	return filters
 }
 
 func writeGmailFilter(ctx context.Context, filter *gmail.Filter) error {
