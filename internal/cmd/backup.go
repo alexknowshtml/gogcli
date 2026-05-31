@@ -91,6 +91,9 @@ type BackupInitCmd struct {
 
 func (c *BackupInitCmd) Run(ctx context.Context, flags *RootFlags) error {
 	opts := c.options()
+	if c.NoPush && strings.TrimSpace(c.Remote) == "" {
+		opts.SuppressDefaultRemote = true
+	}
 	if flags != nil && flags.DryRun {
 		cfg, err := backup.ResolveOptions(opts)
 		if err != nil {

@@ -24,16 +24,17 @@ type Config struct {
 }
 
 type Options struct {
-	ConfigPath     string
-	Repo           string
-	Remote         string
-	Identity       string
-	Recipients     []string
-	Push           bool
-	SkipPull       bool
-	AsyncPush      bool
-	PushQueueLimit int
-	Progress       func(format string, args ...any)
+	ConfigPath            string
+	Repo                  string
+	Remote                string
+	Identity              string
+	Recipients            []string
+	SuppressDefaultRemote bool
+	Push                  bool
+	SkipPull              bool
+	AsyncPush             bool
+	PushQueueLimit        int
+	Progress              func(format string, args ...any)
 }
 
 func DefaultConfig() Config {
@@ -114,6 +115,10 @@ func SaveConfig(path string, cfg Config) error {
 }
 
 func ResolveOptions(opts Options) (Config, error) {
+	remoteExplicit, err := configFileHasRemote(opts.ConfigPath)
+	if err != nil {
+		return Config{}, err
+	}
 	cfg, err := LoadConfig(opts.ConfigPath)
 	if err != nil {
 		return Config{}, err
@@ -124,6 +129,9 @@ func ResolveOptions(opts Options) (Config, error) {
 	if strings.TrimSpace(opts.Remote) != "" {
 		cfg.Remote = opts.Remote
 	}
+	if opts.SuppressDefaultRemote && !remoteExplicit && cfg.Remote == defaultRemote {
+		cfg.Remote = ""
+	}
 	if strings.TrimSpace(opts.Identity) != "" {
 		cfg.Identity = opts.Identity
 	}
@@ -133,6 +141,43 @@ func ResolveOptions(opts Options) (Config, error) {
 	cfg.Repo = expandHome(cfg.Repo)
 	cfg.Identity = expandHome(cfg.Identity)
 	return cfg, nil
+}
+
+func configFileHasRemote(path string) (bool, error) {
+	useDefault := strings.TrimSpace(path) == ""
+	if useDefault {
+		defaultPath, pathErr := DefaultConfigPath()
+		if pathErr != nil {
+			return false, fmt.Errorf("resolve backup config path: %w", pathErr)
+		}
+		path = defaultPath
+	}
+	data, err := os.ReadFile(expandHome(path))
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			if useDefault && !appconfig.HasExplicitConfigOverride() {
+				legacyData, legacyErr := os.ReadFile(expandHome(legacyDefaultConfigPath()))
+				if legacyErr == nil {
+					return jsonObjectHasKey(legacyData, "remote")
+				}
+				if !errors.Is(legacyErr, os.ErrNotExist) {
+					return false, legacyErr
+				}
+			}
+			return false, nil
+		}
+		return false, err
+	}
+	return jsonObjectHasKey(data, "remote")
+}
+
+func jsonObjectHasKey(data []byte, key string) (bool, error) {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return false, fmt.Errorf("read backup config: %w", err)
+	}
+	_, ok := raw[key]
+	return ok, nil
 }
 
 func expandHome(path string) string {
