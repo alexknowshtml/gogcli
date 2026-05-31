@@ -308,7 +308,7 @@ func (c *GmailThreadAttachmentsCmd) Run(ctx context.Context, flags *RootFlags) e
 		}
 	}
 
-	var allAttachments []attachmentDownloadOutput
+	allAttachments := make([]attachmentDownloadOutput, 0)
 	for _, msg := range thread.Messages {
 		if msg == nil {
 			continue

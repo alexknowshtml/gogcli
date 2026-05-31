@@ -247,4 +247,21 @@ func TestGmailThreadGetAndAttachments_JSON(t *testing.T) {
 	if !strings.Contains(emptyAttachOut, "\"attachments\"") {
 		t.Fatalf("unexpected empty attachments output: %q", emptyAttachOut)
 	}
+
+	noAttsJSONOut := captureStdout(t, func() {
+		_ = captureStderr(t, func() {
+			if err := Execute([]string{"--json", "--account", "a@b.com", "gmail", "thread", "attachments", "noatts"}); err != nil {
+				t.Fatalf("Execute no attachments json: %v", err)
+			}
+		})
+	})
+	var noAttsJSON struct {
+		Attachments []map[string]any `json:"attachments"`
+	}
+	if err := json.Unmarshal([]byte(noAttsJSONOut), &noAttsJSON); err != nil {
+		t.Fatalf("decode no attachments json: %v", err)
+	}
+	if noAttsJSON.Attachments == nil {
+		t.Fatalf("attachments is nil in output: %s", noAttsJSONOut)
+	}
 }

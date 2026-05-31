@@ -26,6 +26,7 @@
 - Gmail: return empty JSON arrays, not null, for empty forwarding address, delegate, and send-as settings lists.
 - Gmail: make `gmail track setup`, `gmail track status`, and `gmail track key rotate` honor `--json` on success without printing generated tracking secrets to stderr.
 - Gmail: return an empty JSON array, not null, for empty Gmail filter lists and JSON filter exports.
+- Gmail: return an empty JSON array, not null, for `gmail thread attachments --json` when a thread has no attachments.
 - People: return an empty JSON array, not null, for `people relations --json` when a profile has no relation entries.
 - Sheets: return an empty JSON array, not null, for blank ranges read with `sheets get --json`.
 - Slides: return empty JSON arrays, not null, for blank slide text and image lists in `slides read-slide`.
