@@ -178,6 +178,96 @@ func TestBackupPushUnsupportedServiceIsUsageError(t *testing.T) {
 	}
 }
 
+func TestBackupPushValidatesBoundsBeforeAuth(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(t.TempDir(), "config-home"))
+
+	for _, tc := range []struct {
+		name string
+		args []string
+		want string
+	}{
+		{
+			name: "max",
+			args: []string{"backup", "push", "--services", "gmail", "--max=-1"},
+			want: "--max must be >= 0",
+		},
+		{
+			name: "shard rows",
+			args: []string{"backup", "push", "--services", "gmail", "--shard-max-rows=0"},
+			want: "--shard-max-rows must be > 0",
+		},
+		{
+			name: "drive content max bytes",
+			args: []string{"backup", "push", "--services", "drive", "--drive-content-max-bytes=-1"},
+			want: "--drive-content-max-bytes must be >= 0",
+		},
+		{
+			name: "drive content timeout",
+			args: []string{"backup", "push", "--services", "drive", "--drive-content-timeout=0"},
+			want: "--drive-content-timeout must be > 0",
+		},
+		{
+			name: "workspace max files",
+			args: []string{"backup", "push", "--services", "workspace", "--workspace-max-files=-1"},
+			want: "--workspace-max-files must be >= 0",
+		},
+		{
+			name: "gmail checkpoint rows",
+			args: []string{"backup", "push", "--services", "gmail", "--gmail-checkpoint-rows=-1"},
+			want: "--gmail-checkpoint-rows must be >= 0",
+		},
+		{
+			name: "gmail checkpoint interval",
+			args: []string{"backup", "push", "--services", "gmail", "--gmail-checkpoint-interval=-1s"},
+			want: "--gmail-checkpoint-interval must be >= 0",
+		},
+		{
+			name: "gmail command max",
+			args: []string{"backup", "gmail", "push", "--max=-1"},
+			want: "--max must be >= 0",
+		},
+		{
+			name: "gmail command shard rows",
+			args: []string{"backup", "gmail", "push", "--shard-max-rows=0"},
+			want: "--shard-max-rows must be > 0",
+		},
+		{
+			name: "gmail command checkpoint rows",
+			args: []string{"backup", "gmail", "push", "--checkpoint-rows=-1"},
+			want: "--checkpoint-rows must be >= 0",
+		},
+		{
+			name: "gmail command checkpoint interval",
+			args: []string{"backup", "gmail", "push", "--checkpoint-interval=-1s"},
+			want: "--checkpoint-interval must be >= 0",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			args := append([]string{
+				"--account", "a@b.com",
+				"backup",
+			}, tc.args[1:]...)
+			args = append(args,
+				"--config", filepath.Join(dir, "backup.json"),
+				"--repo", filepath.Join(dir, "repo"),
+				"--no-push",
+			)
+			err := Execute(args)
+			if err == nil {
+				t.Fatal("expected error")
+			}
+			if got := ExitCode(err); got != 2 {
+				t.Fatalf("expected usage exit code 2, got %d (err=%v)", got, err)
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("expected %q, got %v", tc.want, err)
+			}
+		})
+	}
+}
+
 func TestGmailBackupMessageCacheRoundTrips(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	message := gmailBackupMessage{

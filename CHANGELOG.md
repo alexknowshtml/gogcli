@@ -13,6 +13,7 @@
 - Backup: make `backup init --no-push` initialize a local-only repo when no remote is explicitly provided instead of cloning the default remote.
 - Backup: return usage exit code 2 for unsupported `backup push --services` values instead of reporting them as generic runtime failures.
 - Backup: return usage exit code 2 when `backup export --out` points inside the backup repo.
+- Backup: return usage exit code 2 for invalid backup size, timeout, and checkpoint bounds before OAuth or repository setup.
 - Backup: keep semantic manifest counts such as `contacts.connections` and `contacts.other` in `backup verify` and `backup export` results after shard verification.
 - Auth: return usage exit code 2 for unknown `--services` values instead of reporting them as generic runtime failures.
 - Auth: return usage exit code 2 for invalid service-account key JSON instead of reporting it as a generic runtime failure.

@@ -154,6 +154,9 @@ func (c *BackupPushCmd) Run(ctx context.Context, flags *RootFlags) error {
 	if len(services) == 0 {
 		return usage("at least one --services value is required")
 	}
+	if err := c.validate(); err != nil {
+		return err
+	}
 	backupOpts := c.options()
 	backupOpts.AsyncPush = c.GmailCheckpoints
 	backupOpts.Progress = func(format string, args ...any) { gmailBackupProgressf(ctx, format, args...) }
@@ -285,6 +288,31 @@ func (c *BackupPushCmd) Run(ctx context.Context, flags *RootFlags) error {
 	return writeBackupResult(ctx, result)
 }
 
+func (c *BackupPushCmd) validate() error {
+	if c.Max < 0 {
+		return usage("--max must be >= 0")
+	}
+	if c.ShardMaxRows <= 0 {
+		return usage("--shard-max-rows must be > 0")
+	}
+	if c.DriveContentMaxBytes < 0 {
+		return usage("--drive-content-max-bytes must be >= 0")
+	}
+	if c.DriveContentTimeout <= 0 {
+		return usage("--drive-content-timeout must be > 0")
+	}
+	if c.WorkspaceMaxFiles < 0 {
+		return usage("--workspace-max-files must be >= 0")
+	}
+	if c.GmailCheckpointRows < 0 {
+		return usage("--gmail-checkpoint-rows must be >= 0")
+	}
+	if c.GmailCheckpointEvery < 0 {
+		return usage("--gmail-checkpoint-interval must be >= 0")
+	}
+	return nil
+}
+
 func (c *BackupPushCmd) buildOptionalSnapshot(flags *RootFlags, service string, build func() (backup.Snapshot, error)) (backup.Snapshot, error) {
 	snapshot, err := build()
 	if err == nil || !c.BestEffort {
@@ -311,6 +339,9 @@ type BackupGmailPushCmd struct {
 }
 
 func (c *BackupGmailPushCmd) Run(ctx context.Context, flags *RootFlags) error {
+	if err := c.validate(); err != nil {
+		return err
+	}
 	backupOpts := c.options()
 	backupOpts.AsyncPush = c.Checkpoints
 	backupOpts.Progress = func(format string, args ...any) { gmailBackupProgressf(ctx, format, args...) }
@@ -334,6 +365,22 @@ func (c *BackupGmailPushCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return err
 	}
 	return writeBackupResult(ctx, result)
+}
+
+func (c *BackupGmailPushCmd) validate() error {
+	if c.Max < 0 {
+		return usage("--max must be >= 0")
+	}
+	if c.ShardMaxRows <= 0 {
+		return usage("--shard-max-rows must be > 0")
+	}
+	if c.CheckpointRows < 0 {
+		return usage("--checkpoint-rows must be >= 0")
+	}
+	if c.CheckpointEvery < 0 {
+		return usage("--checkpoint-interval must be >= 0")
+	}
+	return nil
 }
 
 type BackupStatusCmd struct {
