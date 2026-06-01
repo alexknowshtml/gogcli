@@ -131,6 +131,28 @@ func TestFormsAddQuestionAppend(t *testing.T) {
 	}
 }
 
+func TestFormsAddQuestionRejectsInvalidAppendIndexBeforeDryRun(t *testing.T) {
+	origNew := newFormsService
+	t.Cleanup(func() { newFormsService = origNew })
+	newFormsService = func(context.Context, string) (*formsapi.Service, error) {
+		t.Fatal("forms service should not be created")
+		return nil, context.Canceled
+	}
+
+	err := runKong(t, &FormsAddQuestionCmd{}, []string{
+		"form1",
+		"--title", "Favorite color",
+		"--type", "text",
+		"--index=-2",
+	}, newQuietUIContext(t), &RootFlags{Account: "a@b.com", DryRun: true})
+	if err == nil {
+		t.Fatal("expected index validation error")
+	}
+	if got := ExitCode(err); got != 2 {
+		t.Fatalf("ExitCode = %d, want 2 (err=%v)", got, err)
+	}
+}
+
 func TestFormsAddQuestionAppendWithGrading(t *testing.T) {
 	origNew := newFormsService
 	t.Cleanup(func() { newFormsService = origNew })

@@ -47,6 +47,9 @@ func (c *FormsAddQuestionCmd) Run(ctx context.Context, flags *RootFlags) error {
 	if title == "" {
 		return usage("empty --title")
 	}
+	if c.Index < -1 {
+		return usage("--index must be >= -1")
+	}
 	qType := strings.ToLower(strings.TrimSpace(c.Type))
 
 	question, err := buildQuestion(qType, c)
