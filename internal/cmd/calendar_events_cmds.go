@@ -36,6 +36,9 @@ type CalendarEventsCmd struct {
 }
 
 func (c *CalendarEventsCmd) Run(ctx context.Context, flags *RootFlags) error {
+	if c.Max <= 0 {
+		return usage("max must be > 0")
+	}
 	account, err := requireAccount(flags)
 	if err != nil {
 		return err

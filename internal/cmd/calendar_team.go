@@ -40,14 +40,16 @@ type teamEvent struct {
 
 func (c *CalendarTeamCmd) Run(ctx context.Context, flags *RootFlags) error {
 	u := ui.FromContext(ctx)
-	account, err := requireAccount(flags)
-	if err != nil {
-		return err
-	}
-
 	groupEmail := strings.TrimSpace(c.GroupEmail)
 	if groupEmail == "" {
 		return usage("group email required")
+	}
+	if c.Max <= 0 {
+		return usage("max must be > 0")
+	}
+	account, err := requireAccount(flags)
+	if err != nil {
+		return err
 	}
 
 	// Get calendar service first (for timezone resolution)

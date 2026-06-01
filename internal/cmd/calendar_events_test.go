@@ -237,6 +237,7 @@ func TestCalendarEventsCmd_DefaultsToPrimary(t *testing.T) {
 	cmd := &CalendarEventsCmd{
 		From: "2025-01-01T00:00:00Z",
 		To:   "2025-01-02T00:00:00Z",
+		Max:  10,
 	}
 	out := captureStdout(t, func() {
 		if err := cmd.Run(ctx, flags); err != nil {
@@ -312,6 +313,7 @@ func TestCalendarEventsCmd_CalendarsFlag(t *testing.T) {
 		Calendars: "1,Family",
 		From:      "2025-01-01T00:00:00Z",
 		To:        "2025-01-02T00:00:00Z",
+		Max:       10,
 	}
 	out := captureStdout(t, func() {
 		if err := cmd.Run(ctx, flags); err != nil {

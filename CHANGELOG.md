@@ -28,6 +28,7 @@
 - Calendar: return usage exit code 2 when `calendar respond` cannot respond to the selected event.
 - Calendar: return usage exit code 2 when `calendar propose-time --decline` cannot decline the selected event.
 - Calendar: return usage exit code 2 for empty `calendar search` queries instead of reporting them as generic runtime failures.
+- Calendar: return usage exit code 2 for non-positive list/search/team/users `--max` values before auth/API setup.
 - Calendar: reject all-day or date-only Out of Office event requests locally because Google Calendar only accepts timed OOO events on enterprise calendars.
 - Chat: validate DM recipient emails before dry-run instead of accepting invalid direct-message requests.
 - Chat: validate reaction delete resource paths before dry-run instead of accepting invalid reaction delete requests.
