@@ -35,6 +35,9 @@ func (c *FormsWatchCreateCmd) Run(ctx context.Context, flags *RootFlags) error {
 	if topicID == "" {
 		return usage("empty --topic")
 	}
+	if err := validateFormsWatchTopicName(topicID); err != nil {
+		return err
+	}
 
 	if dryRunErr := dryRunExit(ctx, flags, "forms.watches.create", map[string]any{
 		"form_id":    formID,
@@ -86,6 +89,14 @@ func (c *FormsWatchCreateCmd) Run(ctx context.Context, flags *RootFlags) error {
 	u.Out().Linef("state\t%s", watch.State)
 	if watch.ExpireTime != "" {
 		u.Out().Linef("expires\t%s", watch.ExpireTime)
+	}
+	return nil
+}
+
+func validateFormsWatchTopicName(topicID string) error {
+	parts := strings.Split(strings.TrimSpace(topicID), "/")
+	if len(parts) != 4 || parts[0] != "projects" || strings.TrimSpace(parts[1]) == "" || parts[2] != "topics" || strings.TrimSpace(parts[3]) == "" {
+		return usage("--topic must be in projects/{project}/topics/{topic} format")
 	}
 	return nil
 }

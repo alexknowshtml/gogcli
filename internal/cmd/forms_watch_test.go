@@ -93,6 +93,23 @@ func TestFormsWatchCommands(t *testing.T) {
 	}
 }
 
+func TestFormsWatchCreateRejectsInvalidTopicBeforeDryRun(t *testing.T) {
+	origNew := newFormsService
+	t.Cleanup(func() { newFormsService = origNew })
+	newFormsService = func(context.Context, string) (*formsapi.Service, error) {
+		t.Fatal("forms service should not be created")
+		return nil, context.Canceled
+	}
+
+	err := runKong(t, &FormsWatchCreateCmd{}, []string{"form1", "--topic", "nope"}, newQuietUIContext(t), &RootFlags{Account: "a@b.com", DryRun: true})
+	if err == nil {
+		t.Fatal("expected topic validation error")
+	}
+	if got := ExitCode(err); got != 2 {
+		t.Fatalf("ExitCode = %d, want 2 (err=%v)", got, err)
+	}
+}
+
 func TestFormsWatchList_JSONEmptyArray(t *testing.T) {
 	origNew := newFormsService
 	t.Cleanup(func() { newFormsService = origNew })

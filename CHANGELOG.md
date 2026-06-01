@@ -36,6 +36,7 @@
 - Config: return usage exit code 2 for invalid config keys and values instead of reporting them as generic runtime failures.
 - Forms: return an empty JSON array, not null, for `forms watch list` when a form has no active watches.
 - Forms: return an empty JSON array, not null, for `forms responses list` when a form has no responses.
+- Forms: return usage exit code 2 when `forms watch create --topic` is not in `projects/{project}/topics/{topic}` format instead of accepting an invalid dry-run.
 - Forms: return usage exit code 2 when `forms add-question --index` is below `-1` instead of treating every negative value as append.
 - Docs/Sheets/Slides: report service-specific dry-run ops for `copy` commands instead of `drive.copy`.
 - Docs: return usage exit code 2 when Markdown writes contain local image references that must be hosted at a public HTTPS URL.
