@@ -38,6 +38,11 @@ func (c *ChatDMSendCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return usage("required: --text")
 	}
 	thread := strings.TrimSpace(c.Thread)
+	if thread != "" {
+		if _, err := normalizeThread("spaces/_", thread); err != nil {
+			return usage(fmt.Sprintf("invalid thread: %v", err))
+		}
+	}
 
 	if err := dryRunExit(ctx, flags, "chat.dm.send", map[string]any{
 		"email":  email,

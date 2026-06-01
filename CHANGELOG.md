@@ -31,6 +31,7 @@
 - Calendar: reject all-day or date-only Out of Office event requests locally because Google Calendar only accepts timed OOO events on enterprise calendars.
 - Chat: validate DM recipient emails before dry-run instead of accepting invalid direct-message requests.
 - Chat: validate reaction delete resource paths before dry-run instead of accepting invalid reaction delete requests.
+- Chat: reject malformed space, thread, and message resource paths before dry-run instead of accepting invalid Chat requests.
 - Chat: validate space member emails and `users/...` identifiers before dry-run instead of accepting invalid space setup requests.
 - Contacts: warm the People API contact-search cache, including Google's documented propagation wait, before contact and other-contact searches plus Gmail `--from-contact` resolution so fresh contact changes are visible.
 - Contacts: use an other-contact-safe read mask for `contacts other list` and `contacts other search` so Google does not reject the request.

@@ -13,7 +13,14 @@ func normalizeSpace(resource string) (string, error) {
 		return "", fmt.Errorf("empty space")
 	}
 	if strings.HasPrefix(space, "spaces/") {
+		parts := strings.Split(space, "/")
+		if len(parts) != 2 || parts[1] == "" {
+			return "", fmt.Errorf("invalid space resource %q", space)
+		}
 		return space, nil
+	}
+	if strings.Contains(space, "/") {
+		return "", fmt.Errorf("invalid space id %q", space)
 	}
 	return "spaces/" + space, nil
 }
@@ -64,13 +71,14 @@ func normalizeThread(space, resource string) (string, error) {
 		return "", fmt.Errorf("empty thread")
 	}
 	if strings.HasPrefix(thread, "spaces/") {
-		if !strings.Contains(thread, "/threads/") {
+		parts := strings.Split(thread, "/")
+		if len(parts) != 4 || parts[0] != "spaces" || parts[1] == "" || parts[2] != "threads" || parts[3] == "" {
 			return "", fmt.Errorf("invalid thread resource %q", thread)
 		}
 		return thread, nil
 	}
 	thread = strings.TrimPrefix(thread, "threads/")
-	if strings.Contains(thread, "/") {
+	if thread == "" || strings.Contains(thread, "/") {
 		return "", fmt.Errorf("invalid thread id %q", thread)
 	}
 	space, err := normalizeSpace(space)
@@ -86,13 +94,14 @@ func normalizeMessage(space, resource string) (string, error) {
 		return "", fmt.Errorf("empty message")
 	}
 	if strings.HasPrefix(msg, "spaces/") {
-		if !strings.Contains(msg, "/messages/") {
+		parts := strings.Split(msg, "/")
+		if len(parts) != 4 || parts[0] != "spaces" || parts[1] == "" || parts[2] != "messages" || parts[3] == "" {
 			return "", fmt.Errorf("invalid message resource %q", msg)
 		}
 		return msg, nil
 	}
 	msg = strings.TrimPrefix(msg, "messages/")
-	if strings.Contains(msg, "/") {
+	if msg == "" || strings.Contains(msg, "/") {
 		return "", fmt.Errorf("invalid message id %q", msg)
 	}
 	space, err := normalizeSpace(space)

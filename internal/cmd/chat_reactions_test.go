@@ -13,6 +13,64 @@ import (
 	"google.golang.org/api/option"
 )
 
+func TestNormalizeSpace(t *testing.T) {
+	tests := []struct {
+		name    string
+		space   string
+		want    string
+		wantErr bool
+	}{
+		{name: "full resource path", space: "spaces/AAA", want: "spaces/AAA"},
+		{name: "bare id", space: "AAA", want: "spaces/AAA"},
+		{name: "empty space", wantErr: true},
+		{name: "empty full resource id", space: "spaces/", wantErr: true},
+		{name: "extra path segment", space: "spaces/AAA/extra", wantErr: true},
+		{name: "bare id with slash", space: "AAA/extra", wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := normalizeSpace(tt.space)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("normalizeSpace(%q) error = %v, wantErr %v", tt.space, err, tt.wantErr)
+			}
+			if !tt.wantErr && got != tt.want {
+				t.Fatalf("normalizeSpace(%q) = %q, want %q", tt.space, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNormalizeThread(t *testing.T) {
+	tests := []struct {
+		name    string
+		space   string
+		thread  string
+		want    string
+		wantErr bool
+	}{
+		{name: "full resource path", thread: "spaces/AAA/threads/t1", want: "spaces/AAA/threads/t1"},
+		{name: "bare id with space", space: "spaces/AAA", thread: "t1", want: "spaces/AAA/threads/t1"},
+		{name: "threads prefix with bare id", space: "AAA", thread: "threads/t1", want: "spaces/AAA/threads/t1"},
+		{name: "empty thread", wantErr: true},
+		{name: "full resource missing id", thread: "spaces/AAA/threads/", wantErr: true},
+		{name: "full resource extra segment", thread: "spaces/AAA/threads/t1/extra", wantErr: true},
+		{name: "wrong full resource kind", thread: "spaces/AAA/messages/m1", wantErr: true},
+		{name: "bare id with slash", space: "AAA", thread: "t1/extra", wantErr: true},
+		{name: "invalid space", space: "AAA/extra", thread: "t1", wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := normalizeThread(tt.space, tt.thread)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("normalizeThread(%q, %q) error = %v, wantErr %v", tt.space, tt.thread, err, tt.wantErr)
+			}
+			if !tt.wantErr && got != tt.want {
+				t.Fatalf("normalizeThread(%q, %q) = %q, want %q", tt.space, tt.thread, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestNormalizeMessage(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -50,6 +108,28 @@ func TestNormalizeMessage(t *testing.T) {
 		{
 			name:    "spaces/ prefix but missing /messages/",
 			msg:     "spaces/AAA/threads/t1",
+			wantErr: true,
+		},
+		{
+			name:    "full resource missing id",
+			msg:     "spaces/AAA/messages/",
+			wantErr: true,
+		},
+		{
+			name:    "full resource extra segment",
+			msg:     "spaces/AAA/messages/msg1/extra",
+			wantErr: true,
+		},
+		{
+			name:    "messages prefix missing id",
+			space:   "AAA",
+			msg:     "messages/",
+			wantErr: true,
+		},
+		{
+			name:    "invalid space",
+			space:   "AAA/extra",
+			msg:     "msg1",
 			wantErr: true,
 		},
 	}
@@ -214,6 +294,31 @@ func TestExecute_ChatMessagesReactionsCreate_BareIDWithSpace(t *testing.T) {
 
 	if !strings.Contains(gotPath, "spaces/AAA/messages/msg1") {
 		t.Fatalf("unexpected request path: %q", gotPath)
+	}
+}
+
+func TestExecute_ChatMessagesReactionsCreate_InvalidMessageFailsBeforeDryRun(t *testing.T) {
+	origNew := newChatService
+	t.Cleanup(func() { newChatService = origNew })
+	newChatService = func(context.Context, string) (*chat.Service, error) {
+		t.Fatalf("expected validation to fail before creating chat service")
+		return nil, errUnexpectedChatServiceCall
+	}
+
+	testCases := [][]string{
+		{"--account", "a@b.com", "--dry-run", "chat", "messages", "reactions", "create", "spaces/AAA/messages/msg1/extra", "X"},
+		{"--account", "a@b.com", "--dry-run", "chat", "messages", "reactions", "create", "msg1", "X", "--space", "AAA/extra"},
+	}
+	for _, args := range testCases {
+		t.Run(strings.Join(args[4:], "_"), func(t *testing.T) {
+			_ = captureStderr(t, func() {
+				err := Execute(args)
+				var exitErr *ExitError
+				if !errors.As(err, &exitErr) || exitErr.Code != 2 || !strings.Contains(err.Error(), "required: message") {
+					t.Fatalf("unexpected err: %v", err)
+				}
+			})
+		})
 	}
 }
 
