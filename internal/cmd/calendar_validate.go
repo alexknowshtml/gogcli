@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 )
@@ -20,10 +19,10 @@ func validateColorId(s string) (string, error) {
 	}
 	id, err := strconv.Atoi(s)
 	if err != nil {
-		return "", fmt.Errorf("invalid color ID: %q (must be 1-11)", s)
+		return "", usagef("invalid color ID: %q (must be 1-11)", s)
 	}
 	if id < 1 || id > 11 {
-		return "", fmt.Errorf("color ID must be 1-11 (got %d)", id)
+		return "", usagef("color ID must be 1-11 (got %d)", id)
 	}
 	return s, nil
 }
@@ -35,10 +34,10 @@ func validateCalendarColorId(s string) (string, error) {
 	}
 	id, err := strconv.Atoi(s)
 	if err != nil {
-		return "", fmt.Errorf("invalid calendar color ID: %q (must be 1-24)", s)
+		return "", usagef("invalid calendar color ID: %q (must be 1-24)", s)
 	}
 	if id < 1 || id > 24 {
-		return "", fmt.Errorf("calendar color ID must be 1-24 (got %d)", id)
+		return "", usagef("calendar color ID must be 1-24 (got %d)", id)
 	}
 	return s, nil
 }
@@ -55,7 +54,7 @@ func validateVisibility(s string) (string, error) {
 		"confidential": true,
 	}
 	if !valid[s] {
-		return "", fmt.Errorf("invalid visibility: %q (must be default, public, private, or confidential)", s)
+		return "", usagef("invalid visibility: %q (must be default, public, private, or confidential)", s)
 	}
 	return s, nil
 }
@@ -73,7 +72,7 @@ func validateTransparency(s string) (string, error) {
 	case transparencyOpaque, transparencyTransparent:
 		return s, nil
 	default:
-		return "", fmt.Errorf("invalid transparency: %q (must be opaque/busy or transparent/free)", s)
+		return "", usagef("invalid transparency: %q (must be opaque/busy or transparent/free)", s)
 	}
 }
 
@@ -90,6 +89,6 @@ func validateSendUpdates(s string) (string, error) {
 	case sendUpdatesNone:
 		return sendUpdatesNone, nil
 	default:
-		return "", fmt.Errorf("invalid send-updates value: %q (must be all, externalOnly, or none)", s)
+		return "", usagef("invalid send-updates value: %q (must be all, externalOnly, or none)", s)
 	}
 }

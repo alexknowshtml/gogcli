@@ -18,6 +18,7 @@
 - Auth: make `auth keep --dry-run` report the planned service-account paths without writing files.
 - Calendar: make `calendar conflicts` check all calendars by default and reject explicit one-calendar selections instead of silently reporting no cross-calendar conflicts.
 - Calendar: return an empty JSON array, not null, for `calendar conflicts --json` when no conflicts are found.
+- Calendar: return usage exit code 2 for invalid event type, color, visibility, transparency, and notification flags.
 - Calendar: return usage exit code 2 for invalid focus-time and working-location flag values instead of reporting them as generic runtime failures.
 - Calendar: return usage exit code 2 for invalid `calendar respond --status` values instead of reporting them as generic runtime failures.
 - Calendar: return usage exit code 2 for invalid create-event timezones and reminders instead of reporting them as generic runtime failures.

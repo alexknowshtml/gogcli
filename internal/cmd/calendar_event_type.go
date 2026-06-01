@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"fmt"
 	"strings"
 )
 
@@ -34,7 +33,7 @@ func normalizeEventType(raw string) (string, error) {
 	case "working-location", "workinglocation", "working_location", "wl":
 		return eventTypeWorkingLocation, nil
 	default:
-		return "", fmt.Errorf("invalid event type: %q (must be %s, focus-time, out-of-office, or working-location)", raw, eventTypeDefault)
+		return "", usagef("invalid event type: %q (must be %s, focus-time, out-of-office, or working-location)", raw, eventTypeDefault)
 	}
 }
 
@@ -55,7 +54,7 @@ func resolveEventType(raw string, focusFlags, oooFlags, workingFlags bool) (stri
 			count++
 		}
 		if count > 1 {
-			return "", fmt.Errorf("event-type flags are mixed; choose one of focus-time, out-of-office, or working-location")
+			return "", usage("event-type flags are mixed; choose one of focus-time, out-of-office, or working-location")
 		}
 		switch {
 		case focusFlags:
@@ -71,15 +70,15 @@ func resolveEventType(raw string, focusFlags, oooFlags, workingFlags bool) (stri
 	switch eventType {
 	case eventTypeFocusTime:
 		if oooFlags || workingFlags {
-			return "", fmt.Errorf("focus-time cannot be combined with out-of-office or working-location flags")
+			return "", usage("focus-time cannot be combined with out-of-office or working-location flags")
 		}
 	case eventTypeOutOfOffice:
 		if focusFlags || workingFlags {
-			return "", fmt.Errorf("out-of-office cannot be combined with focus-time or working-location flags")
+			return "", usage("out-of-office cannot be combined with focus-time or working-location flags")
 		}
 	case eventTypeWorkingLocation:
 		if focusFlags || oooFlags {
-			return "", fmt.Errorf("working-location cannot be combined with focus-time or out-of-office flags")
+			return "", usage("working-location cannot be combined with focus-time or out-of-office flags")
 		}
 	}
 	return eventType, nil

@@ -28,10 +28,10 @@ func TestNormalizeEventType(t *testing.T) {
 }
 
 func TestResolveEventTypeConflicts(t *testing.T) {
-	if _, err := resolveEventType("focus-time", false, true, false); err == nil {
-		t.Fatalf("expected conflict with focus + ooo flags")
-	}
-	if _, err := resolveEventType("", true, true, false); err == nil {
-		t.Fatalf("expected conflict with multiple flag sets")
-	}
+	_, err := resolveEventType("focus-time", false, true, false)
+	requireUsageError(t, err)
+	_, err = resolveEventType("", true, true, false)
+	requireUsageError(t, err)
+	_, err = resolveEventType("nope", false, false, false)
+	requireUsageError(t, err)
 }
