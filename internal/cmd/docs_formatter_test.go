@@ -77,6 +77,34 @@ func TestMarkdownToDocsRequests_Strikethrough(t *testing.T) {
 	}
 }
 
+func TestMarkdownToDocsRequests_StripsExplicitHeadingAnchor(t *testing.T) {
+	elements := ParseMarkdown("## Files {#attachments}\n")
+	stripMarkdownElementHeadingAnchors(elements)
+	requests, text, tables := MarkdownToDocsRequests(elements, 5, "t.second")
+	if text != "Files\n" {
+		t.Fatalf("text = %q, want %q", text, "Files\n")
+	}
+	if len(tables) != 0 {
+		t.Fatalf("unexpected tables: %d", len(tables))
+	}
+	if len(requests) == 0 || requests[0].UpdateParagraphStyle == nil {
+		t.Fatalf("expected heading paragraph style request, got %#v", requests)
+	}
+	if got := requests[0].UpdateParagraphStyle.Range; got.StartIndex != 5 || got.EndIndex != 11 || got.TabId != "t.second" {
+		t.Fatalf("unexpected heading range: %#v", got)
+	}
+}
+
+func TestMarkdownToDocsRequests_KeepsExplicitHeadingAnchorWithoutOptIn(t *testing.T) {
+	_, text, tables := MarkdownToDocsRequests(ParseMarkdown("## Files {#attachments}\n"), 5, "")
+	if text != "Files {#attachments}\n" {
+		t.Fatalf("text = %q, want explicit anchor preserved", text)
+	}
+	if len(tables) != 0 {
+		t.Fatalf("unexpected tables: %d", len(tables))
+	}
+}
+
 func TestMarkdownToDocsRequests_NestedLists(t *testing.T) {
 	elements := ParseMarkdown("- Parent\n  - **Child**\n    - Grandchild\n\n1. One\n  1. Nested one")
 	requests, text, tables := MarkdownToDocsRequests(elements, 10, "t.second")

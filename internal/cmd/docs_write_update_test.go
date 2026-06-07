@@ -191,6 +191,165 @@ func TestDocsUpdate_MarkdownWithTab(t *testing.T) {
 	}
 }
 
+func TestDocsUpdate_MarkdownRewritesExplicitHeadingAnchorLinks(t *testing.T) {
+	origDocs := newDocsService
+	t.Cleanup(func() { newDocsService = origDocs })
+
+	var batchRequests [][]*docs.Request
+	gets := 0
+	docSvc, cleanup := newDocsServiceForTest(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		switch {
+		case r.Method == http.MethodGet && strings.HasPrefix(path, "/v1/documents/"):
+			gets++
+			w.Header().Set("Content-Type", "application/json")
+			if gets == 1 {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"documentId": "doc1",
+					"body": map[string]any{"content": []any{
+						map[string]any{"startIndex": 1, "endIndex": 2},
+					}},
+				})
+				return
+			}
+			_ = json.NewEncoder(w).Encode(markdownAnchorRewriteDoc("doc1", "h.files", "#attachments"))
+			return
+		case r.Method == http.MethodPost && strings.Contains(path, ":batchUpdate"):
+			var req docs.BatchUpdateDocumentRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				t.Fatalf("decode request: %v", err)
+			}
+			batchRequests = append(batchRequests, req.Requests)
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"documentId": "doc1"})
+			return
+		default:
+			http.NotFound(w, r)
+			return
+		}
+	}))
+	defer cleanup()
+	newDocsService = func(context.Context, string) (*docs.Service, error) { return docSvc, nil }
+
+	flags := &RootFlags{Account: "a@b.com"}
+	ctx := newDocsJSONContext(t)
+	markdown := "# Files {#attachments}\n\n[Jump](#attachments)\n"
+	if err := runKong(t, &DocsUpdateCmd{}, []string{"doc1", "--text", markdown, "--markdown"}, ctx, flags); err != nil {
+		t.Fatalf("update markdown: %v", err)
+	}
+
+	if len(batchRequests) != 2 {
+		t.Fatalf("expected insert and rewrite batch requests, got %d", len(batchRequests))
+	}
+	insert := batchRequests[0][0].InsertText
+	if insert == nil || strings.Contains(insert.Text, "{#attachments}") {
+		t.Fatalf("insert text should strip explicit anchor, got %#v", insert)
+	}
+	rewrite := batchRequests[1][0].UpdateTextStyle
+	if rewrite == nil || rewrite.TextStyle == nil || rewrite.TextStyle.Link == nil || rewrite.TextStyle.Link.HeadingId != "h.files" {
+		t.Fatalf("expected native heading rewrite to h.files, got %#v", batchRequests[1])
+	}
+}
+
+func TestDocsUpdate_ReplaceRangeMarkdownRewritesExplicitHeadingAnchorLinks(t *testing.T) {
+	origDocs := newDocsService
+	t.Cleanup(func() { newDocsService = origDocs })
+
+	var batchRequests [][]*docs.Request
+	gets := 0
+	docSvc, cleanup := newDocsServiceForTest(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		switch {
+		case r.Method == http.MethodGet && strings.HasPrefix(path, "/v1/documents/"):
+			gets++
+			w.Header().Set("Content-Type", "application/json")
+			if gets == 1 {
+				_ = json.NewEncoder(w).Encode(&docs.Document{
+					DocumentId: "doc1",
+					RevisionId: "rev1",
+					Body: &docs.Body{Content: []*docs.StructuralElement{{
+						StartIndex: 1,
+						EndIndex:   8,
+						Paragraph: &docs.Paragraph{Elements: []*docs.ParagraphElement{{
+							StartIndex: 1,
+							EndIndex:   7,
+							TextRun:    &docs.TextRun{Content: "target"},
+						}}},
+					}}},
+				})
+				return
+			}
+			_ = json.NewEncoder(w).Encode(markdownAnchorRewriteDoc("doc1", "h.files", "#attachments"))
+			return
+		case r.Method == http.MethodPost && strings.Contains(path, ":batchUpdate"):
+			var req docs.BatchUpdateDocumentRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				t.Fatalf("decode request: %v", err)
+			}
+			batchRequests = append(batchRequests, req.Requests)
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"documentId": "doc1"})
+			return
+		default:
+			http.NotFound(w, r)
+			return
+		}
+	}))
+	defer cleanup()
+	newDocsService = func(context.Context, string) (*docs.Service, error) { return docSvc, nil }
+
+	flags := &RootFlags{Account: "a@b.com"}
+	ctx := newDocsJSONContext(t)
+	markdown := "# Files {#attachments}\n\n[Jump](#attachments)\n"
+	if err := runKong(t, &DocsUpdateCmd{}, []string{"doc1", "--text", markdown, "--markdown", "--replace-range", "1:7"}, ctx, flags); err != nil {
+		t.Fatalf("update replace markdown: %v", err)
+	}
+
+	if len(batchRequests) != 2 {
+		t.Fatalf("expected replace and rewrite batch requests, got %d", len(batchRequests))
+	}
+	insert := batchRequests[0][1].InsertText
+	if insert == nil || strings.Contains(insert.Text, "{#attachments}") {
+		t.Fatalf("insert text should strip explicit anchor, got %#v", insert)
+	}
+	rewrite := batchRequests[1][0].UpdateTextStyle
+	if rewrite == nil || rewrite.TextStyle == nil || rewrite.TextStyle.Link == nil || rewrite.TextStyle.Link.HeadingId != "h.files" {
+		t.Fatalf("expected native heading rewrite to h.files, got %#v", batchRequests[1])
+	}
+}
+
+func markdownAnchorRewriteDoc(docID, headingID, linkURL string) *docs.Document {
+	return &docs.Document{
+		DocumentId: docID,
+		Body: &docs.Body{Content: []*docs.StructuralElement{
+			{
+				StartIndex: 1,
+				EndIndex:   7,
+				Paragraph: &docs.Paragraph{
+					ParagraphStyle: &docs.ParagraphStyle{NamedStyleType: "HEADING_1", HeadingId: headingID},
+					Elements: []*docs.ParagraphElement{{
+						StartIndex: 1,
+						EndIndex:   7,
+						TextRun:    &docs.TextRun{Content: "Files\n"},
+					}},
+				},
+			},
+			{
+				StartIndex: 8,
+				EndIndex:   13,
+				Paragraph: &docs.Paragraph{Elements: []*docs.ParagraphElement{{
+					StartIndex: 8,
+					EndIndex:   12,
+					TextRun: &docs.TextRun{
+						Content:   "Jump",
+						TextStyle: &docs.TextStyle{Link: &docs.Link{Url: linkURL}},
+					},
+				}}},
+			},
+		}},
+	}
+}
+
 func TestDocsUpdate_ReplaceRangePlainWithTab(t *testing.T) {
 	origDocs := newDocsService
 	t.Cleanup(func() { newDocsService = origDocs })

@@ -265,6 +265,20 @@ func TestMarkdownImage_Placeholder(t *testing.T) {
 	}
 }
 
+func TestSubtractMarkdownImagePlaceholderDrift(t *testing.T) {
+	images := []markdownImage{
+		{token: "test", index: 0},
+		{token: "test", index: 1},
+	}
+	placeholderDrift := (utf16Len("<<IMG_test_0>>") - 1) + (utf16Len("<<IMG_test_1>>") - 1)
+	if got, want := subtractMarkdownImagePlaceholderDrift(40, 1, images), int64(40)-placeholderDrift; got != want {
+		t.Fatalf("subtractMarkdownImagePlaceholderDrift() = %d, want %d", got, want)
+	}
+	if got := subtractMarkdownImagePlaceholderDrift(5, 4, images); got != 4 {
+		t.Fatalf("subtractMarkdownImagePlaceholderDrift() floor = %d, want 4", got)
+	}
+}
+
 func TestMarkdownImage_IsRemote(t *testing.T) {
 	tests := []struct {
 		name string

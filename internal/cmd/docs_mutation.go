@@ -126,7 +126,9 @@ func replaceDocsTextRange(ctx context.Context, svc *docs.Service, doc *docs.Docu
 
 func replaceDocsMarkdownRange(ctx context.Context, svc *docs.Service, doc *docs.Document, startIdx, endIdx int64, replaceText string, tabID string) (requestCount int, inserted int, err error) {
 	cleaned, images := extractMarkdownImages(replaceText)
+	explicitHeadingAnchors := markdownExplicitHeadingAnchors(cleaned)
 	elements := ParseMarkdown(cleaned)
+	stripMarkdownElementHeadingAnchors(elements)
 	prefix := ""
 	baseIndex := startIdx
 	if markdownReplaceNeedsParagraphBoundary(doc, startIdx, tabID, elements) {
@@ -163,6 +165,7 @@ func replaceDocsMarkdownRange(ctx context.Context, svc *docs.Service, doc *docs.
 		return 0, 0, fmt.Errorf("replace (markdown): %w", err)
 	}
 
+	rewriteMaxIndex := baseIndex + utf16Len(textToInsert)
 	if len(tables) > 0 {
 		tableInserter := NewTableInserter(svc, doc.DocumentId)
 		tableOffset := int64(0)
@@ -174,6 +177,7 @@ func replaceDocsMarkdownRange(ctx context.Context, svc *docs.Service, doc *docs.
 			}
 			tableOffset = nextTableInsertOffset(tableOffset, tableIndex, tableEnd)
 		}
+		rewriteMaxIndex += tableOffset
 	}
 
 	if len(images) > 0 {
@@ -182,6 +186,15 @@ func replaceDocsMarkdownRange(ctx context.Context, svc *docs.Service, doc *docs.
 		if imgErr != nil {
 			return requestCount, len(prefix) + len(textToInsert), fmt.Errorf("insert images: %w", imgErr)
 		}
+		rewriteMaxIndex = subtractMarkdownImagePlaceholderDrift(rewriteMaxIndex, baseIndex, images)
+	}
+
+	if markdownMayContainHeadingLinks(cleaned) {
+		rewritten, rewriteErr := rewriteMarkdownHeadingLinksInRange(ctx, svc, doc.DocumentId, tabID, explicitHeadingAnchors, baseIndex, rewriteMaxIndex)
+		if rewriteErr != nil {
+			return requestCount, len(prefix) + len(textToInsert), fmt.Errorf("rewrite heading links: %w", rewriteErr)
+		}
+		requestCount += rewritten
 	}
 
 	return requestCount, len(prefix) + len(textToInsert), nil
@@ -192,8 +205,20 @@ func markdownReplaceNeedsParagraphBoundary(doc *docs.Document, startIdx int64, t
 }
 
 func insertDocsMarkdownAt(ctx context.Context, svc *docs.Service, docID string, insertIdx int64, content string, tabID string) (requestCount int, inserted int, err error) {
+	return insertDocsMarkdownAtWithOptions(ctx, svc, docID, insertIdx, content, tabID, false)
+}
+
+func insertDocsMarkdownAtWithOptions(ctx context.Context, svc *docs.Service, docID string, insertIdx int64, content string, tabID string, stripHeadingAnchors bool) (requestCount int, inserted int, err error) {
+	requestCount, inserted, _, err = insertDocsMarkdownAtWithOptionsAndEnd(ctx, svc, docID, insertIdx, content, tabID, stripHeadingAnchors)
+	return requestCount, inserted, err
+}
+
+func insertDocsMarkdownAtWithOptionsAndEnd(ctx context.Context, svc *docs.Service, docID string, insertIdx int64, content string, tabID string, stripHeadingAnchors bool) (requestCount int, inserted int, endIndex int64, err error) {
 	cleaned, images := extractMarkdownImages(content)
 	elements := ParseMarkdown(cleaned)
+	if stripHeadingAnchors {
+		stripMarkdownElementHeadingAnchors(elements)
+	}
 	prefix := ""
 	baseIndex := insertIdx
 	if insertIdx > 1 && markdownAppendNeedsParagraphBoundary(elements) {
@@ -202,8 +227,9 @@ func insertDocsMarkdownAt(ctx context.Context, svc *docs.Service, docID string, 
 	}
 	formattingRequests, textToInsert, tables := MarkdownToDocsRequests(elements, baseIndex, tabID)
 	if textToInsert == "" {
-		return 0, 0, nil
+		return 0, 0, insertIdx, nil
 	}
+	endIndex = insertIdx + utf16Len(prefix+textToInsert)
 
 	applyTabIDToFormattingRequests(formattingRequests, tabID)
 
@@ -221,7 +247,7 @@ func insertDocsMarkdownAt(ctx context.Context, svc *docs.Service, docID string, 
 
 	requestCount, err = submitBatchedDocsRequests(ctx, svc, docID, requests, nil)
 	if err != nil {
-		return 0, 0, fmt.Errorf("append (markdown): %w", err)
+		return 0, 0, insertIdx, fmt.Errorf("append (markdown): %w", err)
 	}
 
 	if len(tables) > 0 {
@@ -231,21 +257,36 @@ func insertDocsMarkdownAt(ctx context.Context, svc *docs.Service, docID string, 
 			tableIndex := table.StartIndex + tableOffset
 			tableEnd, tableErr := tableInserter.InsertNativeTable(ctx, tableIndex, table.Cells, tabID)
 			if tableErr != nil {
-				return requestCount, len(textToInsert), fmt.Errorf("insert native table: %w", tableErr)
+				return requestCount, len(textToInsert), endIndex, fmt.Errorf("insert native table: %w", tableErr)
 			}
 			tableOffset = nextTableInsertOffset(tableOffset, tableIndex, tableEnd)
 		}
+		endIndex += tableOffset
 	}
 
 	if len(images) > 0 {
 		imgErr := insertImagesIntoDocs(ctx, svc, docID, images, tabID)
 		cleanupDocsImagePlaceholders(ctx, svc, docID, images, tabID)
 		if imgErr != nil {
-			return requestCount, len(prefix) + len(textToInsert), fmt.Errorf("insert images: %w", imgErr)
+			return requestCount, len(prefix) + len(textToInsert), endIndex, fmt.Errorf("insert images: %w", imgErr)
 		}
+		endIndex = subtractMarkdownImagePlaceholderDrift(endIndex, insertIdx, images)
 	}
 
-	return requestCount, len(prefix) + len(textToInsert), nil
+	return requestCount, len(prefix) + len(textToInsert), endIndex, nil
+}
+
+func subtractMarkdownImagePlaceholderDrift(index int64, floor int64, images []markdownImage) int64 {
+	for _, img := range images {
+		drift := utf16Len(img.placeholder()) - 1
+		if drift > 0 {
+			index -= drift
+		}
+	}
+	if index < floor {
+		return floor
+	}
+	return index
 }
 
 // applyTabIDToFormattingRequests propagates tabID to every request whose

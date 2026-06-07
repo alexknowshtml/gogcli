@@ -263,6 +263,8 @@ func (c *DocsWriteCmd) writeMarkdown(ctx context.Context, flags *RootFlags, docI
 
 	cleaned, images := extractMarkdownImages(content)
 	cleaned = normalizeMarkdownTablesForDriveImport(cleaned)
+	explicitHeadingAnchors := markdownImportExplicitHeadingAnchors(cleaned)
+	cleaned = stripMarkdownHeadingAnchors(cleaned)
 	dryRunPayload := map[string]any{
 		"document_id": docID,
 		"written":     len(content),
@@ -305,7 +307,7 @@ func (c *DocsWriteCmd) writeMarkdown(ctx context.Context, flags *RootFlags, docI
 	}
 	rewrittenHeadingLinks := 0
 	if markdownMayContainHeadingLinks(cleaned) {
-		count, rewriteErr := rewriteMarkdownHeadingLinks(ctx, docsSvc, docID)
+		count, rewriteErr := rewriteMarkdownHeadingLinks(ctx, docsSvc, docID, "", explicitHeadingAnchors)
 		if rewriteErr != nil {
 			return fmt.Errorf("rewrite heading links: %w", rewriteErr)
 		}
@@ -356,6 +358,7 @@ func (c *DocsWriteCmd) writeMarkdown(ctx context.Context, flags *RootFlags, docI
 
 func (c *DocsWriteCmd) appendMarkdown(ctx context.Context, flags *RootFlags, docID, content string) error {
 	cleaned, images := extractMarkdownImages(content)
+	explicitHeadingAnchors := markdownExplicitHeadingAnchors(cleaned)
 	dryRunPayload := map[string]any{
 		"document_id": docID,
 		"written":     len(cleaned),
@@ -384,8 +387,13 @@ func (c *DocsWriteCmd) appendMarkdown(ctx context.Context, flags *RootFlags, doc
 	}
 	c.Tab = tabID
 	insertIndex := docsAppendIndex(endIndex)
+	insertedMarkdownStart := insertIndex
+	appendElements := ParseMarkdown(cleaned)
+	if insertIndex > 1 && markdownAppendNeedsParagraphBoundary(appendElements) {
+		insertedMarkdownStart++
+	}
 
-	requestCount, inserted, err := insertDocsMarkdownAt(ctx, svc, docID, insertIndex, content, c.Tab)
+	requestCount, inserted, err := insertDocsMarkdownAtWithOptions(ctx, svc, docID, insertIndex, content, c.Tab, true)
 	if err != nil {
 		if isDocsNotFound(err) {
 			return fmt.Errorf("doc not found or not a Google Doc (id=%s)", docID)
@@ -394,6 +402,15 @@ func (c *DocsWriteCmd) appendMarkdown(ctx context.Context, flags *RootFlags, doc
 	}
 	if err := c.applyDocumentStyle(ctx, svc, docID); err != nil {
 		return err
+	}
+	rewrittenHeadingLinks := 0
+	if markdownMayContainHeadingLinks(cleaned) {
+		count, rewriteErr := rewriteMarkdownHeadingLinksFromIndex(ctx, svc, docID, c.Tab, explicitHeadingAnchors, insertedMarkdownStart)
+		if rewriteErr != nil {
+			return fmt.Errorf("rewrite heading links: %w", rewriteErr)
+		}
+		rewrittenHeadingLinks = count
+		requestCount += count
 	}
 
 	if outfmt.IsJSON(ctx) {
@@ -408,6 +425,9 @@ func (c *DocsWriteCmd) appendMarkdown(ctx context.Context, flags *RootFlags, doc
 		if c.Pageless {
 			payload["pageless"] = true
 		}
+		if rewrittenHeadingLinks > 0 {
+			payload["headingLinks"] = rewrittenHeadingLinks
+		}
 		for k, v := range c.Layout.dryRunPayload() {
 			payload[k] = v
 		}
@@ -420,6 +440,9 @@ func (c *DocsWriteCmd) appendMarkdown(ctx context.Context, flags *RootFlags, doc
 	u.Out().Linef("requests\t%d", requestCount)
 	u.Out().Linef("mode\tappended (markdown converted)")
 	u.Out().Linef("index\t%d", insertIndex)
+	if rewrittenHeadingLinks > 0 {
+		u.Out().Linef("headingLinks\t%d", rewrittenHeadingLinks)
+	}
 	if c.Pageless {
 		u.Out().Linef("pageless\ttrue")
 	}
@@ -433,6 +456,7 @@ func (c *DocsWriteCmd) appendMarkdown(ctx context.Context, flags *RootFlags, doc
 // body content via DeleteContentRange. Other tabs are untouched.
 func (c *DocsWriteCmd) replaceMarkdownInTab(ctx context.Context, flags *RootFlags, docID, content string) error {
 	cleaned, images := extractMarkdownImages(content)
+	explicitHeadingAnchors := markdownExplicitHeadingAnchors(cleaned)
 	dryRunPayload := map[string]any{
 		"document_id": docID,
 		"written":     len(cleaned),
@@ -480,7 +504,7 @@ func (c *DocsWriteCmd) replaceMarkdownInTab(ctx context.Context, flags *RootFlag
 		}
 	}
 
-	requestCount, inserted, err := insertDocsMarkdownAt(ctx, svc, docID, 1, content, tabID)
+	requestCount, inserted, err := insertDocsMarkdownAtWithOptions(ctx, svc, docID, 1, content, tabID, true)
 	if err != nil {
 		if isDocsNotFound(err) {
 			return fmt.Errorf("doc not found or not a Google Doc (id=%s)", docID)
@@ -489,6 +513,15 @@ func (c *DocsWriteCmd) replaceMarkdownInTab(ctx context.Context, flags *RootFlag
 	}
 	if err := c.applyDocumentStyle(ctx, svc, docID); err != nil {
 		return err
+	}
+	rewrittenHeadingLinks := 0
+	if markdownMayContainHeadingLinks(cleaned) {
+		count, rewriteErr := rewriteMarkdownHeadingLinks(ctx, svc, docID, tabID, explicitHeadingAnchors)
+		if rewriteErr != nil {
+			return fmt.Errorf("rewrite heading links: %w", rewriteErr)
+		}
+		rewrittenHeadingLinks = count
+		requestCount += count
 	}
 
 	if outfmt.IsJSON(ctx) {
@@ -503,6 +536,9 @@ func (c *DocsWriteCmd) replaceMarkdownInTab(ctx context.Context, flags *RootFlag
 		if c.Pageless {
 			payload["pageless"] = true
 		}
+		if rewrittenHeadingLinks > 0 {
+			payload["headingLinks"] = rewrittenHeadingLinks
+		}
 		for k, v := range c.Layout.dryRunPayload() {
 			payload[k] = v
 		}
@@ -515,6 +551,9 @@ func (c *DocsWriteCmd) replaceMarkdownInTab(ctx context.Context, flags *RootFlag
 	u.Out().Linef("requests\t%d", requestCount)
 	u.Out().Linef("mode\treplaced tab (markdown converted)")
 	u.Out().Linef("tabId\t%s", tabID)
+	if rewrittenHeadingLinks > 0 {
+		u.Out().Linef("headingLinks\t%d", rewrittenHeadingLinks)
+	}
 	if c.Pageless {
 		u.Out().Linef("pageless\ttrue")
 	}
@@ -626,6 +665,8 @@ func (c *DocsUpdateCmd) Run(ctx context.Context, kctx *kong.Context, flags *Root
 
 	if c.Markdown {
 		var inserted int
+		cleaned, _ := extractMarkdownImages(text)
+		explicitHeadingAnchors := markdownExplicitHeadingAnchors(cleaned)
 		if replacing {
 			loaded, loadErr := loadDocsTargetDocument(ctx, svc, id, c.Tab)
 			if loadErr != nil {
@@ -640,7 +681,19 @@ func (c *DocsUpdateCmd) Run(ctx context.Context, kctx *kong.Context, flags *Root
 				requestCount = replacedRequests
 			}
 		} else {
-			requestCount, inserted, err = insertDocsMarkdownAt(ctx, svc, id, insertIndex, text, c.Tab)
+			insertedMarkdownStart := insertIndex
+			insertElements := ParseMarkdown(cleaned)
+			stripMarkdownElementHeadingAnchors(insertElements)
+			if insertIndex > 1 && markdownAppendNeedsParagraphBoundary(insertElements) {
+				insertedMarkdownStart++
+			}
+			var insertedMarkdownEnd int64
+			requestCount, inserted, insertedMarkdownEnd, err = insertDocsMarkdownAtWithOptionsAndEnd(ctx, svc, id, insertIndex, text, c.Tab, true)
+			if err == nil && markdownMayContainHeadingLinks(cleaned) {
+				var rewritten int
+				rewritten, err = rewriteMarkdownHeadingLinksInRange(ctx, svc, id, c.Tab, explicitHeadingAnchors, insertedMarkdownStart, insertedMarkdownEnd)
+				requestCount += rewritten
+			}
 		}
 		if err != nil {
 			if isDocsNotFound(err) {

@@ -244,6 +244,113 @@ func TestDocsWrite_MarkdownReplaceRewritesHeadingSlugLinks(t *testing.T) {
 	}
 }
 
+func TestDocsWrite_MarkdownReplaceStripsExplicitHeadingAnchors(t *testing.T) {
+	origDocs := newDocsService
+	origDrive := newDriveService
+	t.Cleanup(func() {
+		newDocsService = origDocs
+		newDriveService = origDrive
+	})
+
+	var uploadBody string
+	var sawDocsGet bool
+	var batchReq docs.BatchUpdateDocumentRequest
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasPrefix(r.URL.Path, "/upload/drive/v3/files/doc1"):
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read body: %v", err)
+			}
+			uploadBody = string(body)
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "doc1", "name": "Doc"})
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/documents/doc1"):
+			sawDocsGet = true
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(&docs.Document{
+				DocumentId: "doc1",
+				Body: &docs.Body{Content: []*docs.StructuralElement{
+					{
+						StartIndex: 1,
+						EndIndex:   7,
+						Paragraph: &docs.Paragraph{
+							ParagraphStyle: &docs.ParagraphStyle{NamedStyleType: "HEADING_1", HeadingId: "h.files"},
+							Elements: []*docs.ParagraphElement{{
+								StartIndex: 1,
+								EndIndex:   7,
+								TextRun:    &docs.TextRun{Content: "Files\n"},
+							}},
+						},
+					},
+					{
+						StartIndex: 7,
+						EndIndex:   12,
+						Paragraph: &docs.Paragraph{
+							Elements: []*docs.ParagraphElement{{
+								StartIndex: 7,
+								EndIndex:   11,
+								TextRun: &docs.TextRun{
+									Content:   "Jump",
+									TextStyle: &docs.TextStyle{Link: &docs.Link{Url: "#attachments"}},
+								},
+							}},
+						},
+					},
+				}},
+			})
+		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/documents/doc1:batchUpdate"):
+			if err := json.NewDecoder(r.Body).Decode(&batchReq); err != nil {
+				t.Fatalf("decode batch update: %v", err)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"documentId": "doc1"})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	driveSvc, err := drive.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(srv.Client()),
+		option.WithEndpoint(srv.URL+"/drive/v3/"),
+	)
+	if err != nil {
+		t.Fatalf("NewDriveService: %v", err)
+	}
+	docsSvc, err := docs.NewService(context.Background(),
+		option.WithoutAuthentication(),
+		option.WithHTTPClient(srv.Client()),
+		option.WithEndpoint(srv.URL+"/"),
+	)
+	if err != nil {
+		t.Fatalf("NewDocsService: %v", err)
+	}
+	newDriveService = func(context.Context, string) (*drive.Service, error) { return driveSvc, nil }
+	newDocsService = func(context.Context, string) (*docs.Service, error) { return docsSvc, nil }
+
+	markdown := "# Files {#attachments}\n\n[Jump](#attachments)\n"
+	flags := &RootFlags{Account: "a@b.com"}
+	ctx := newDocsJSONContext(t)
+	if err := runKong(t, &DocsWriteCmd{}, []string{"doc1", "--text", markdown, "--replace", "--markdown"}, ctx, flags); err != nil {
+		t.Fatalf("markdown replace write: %v", err)
+	}
+	if strings.Contains(uploadBody, "{#attachments}") {
+		t.Fatalf("upload body still contains explicit anchor: %q", uploadBody)
+	}
+	if !sawDocsGet {
+		t.Fatal("expected Docs get after Drive markdown import")
+	}
+	if len(batchReq.Requests) != 1 || batchReq.Requests[0].UpdateTextStyle == nil {
+		t.Fatalf("expected one UpdateTextStyle request, got %#v", batchReq.Requests)
+	}
+	styleReq := batchReq.Requests[0].UpdateTextStyle
+	if styleReq.TextStyle == nil || styleReq.TextStyle.Link == nil || styleReq.TextStyle.Link.HeadingId != "h.files" {
+		t.Fatalf("unexpected link rewrite request: %#v", styleReq)
+	}
+}
+
 func TestDocsWrite_MarkdownImagesInsertedAfterDriveUpdate(t *testing.T) {
 	origDocs := newDocsService
 	origDrive := newDriveService
@@ -517,6 +624,121 @@ func TestDocsWrite_MarkdownAppendUsesDocsFormatting(t *testing.T) {
 	}
 	if got := reqs[2].UpdateTextStyle.Range; got.StartIndex != 17 || got.EndIndex != 21 {
 		t.Fatalf("unexpected bold range: %#v", got)
+	}
+}
+
+func TestDocsWrite_MarkdownAppendRewritesExplicitHeadingAnchorLinks(t *testing.T) {
+	origDocs := newDocsService
+	origDrive := newDriveService
+	t.Cleanup(func() {
+		newDocsService = origDocs
+		newDriveService = origDrive
+	})
+
+	var batchRequests [][]*docs.Request
+	var getCalls int
+
+	docSvc, cleanup := newDocsServiceForTest(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		switch {
+		case r.Method == http.MethodGet && strings.HasPrefix(path, "/v1/documents/"):
+			getCalls++
+			w.Header().Set("Content-Type", "application/json")
+			if getCalls == 1 {
+				_ = json.NewEncoder(w).Encode(docBodyWithText("Existing\n"))
+				return
+			}
+			_ = json.NewEncoder(w).Encode(&docs.Document{
+				DocumentId: "doc1",
+				Body: &docs.Body{Content: []*docs.StructuralElement{
+					{
+						StartIndex: 1,
+						EndIndex:   10,
+						Paragraph: &docs.Paragraph{
+							ParagraphStyle: &docs.ParagraphStyle{NamedStyleType: "HEADING_1", HeadingId: "h.existing"},
+							Elements: []*docs.ParagraphElement{{
+								StartIndex: 1,
+								EndIndex:   10,
+								TextRun:    &docs.TextRun{Content: "Existing\n"},
+							}},
+						},
+					},
+					{
+						StartIndex: 10,
+						EndIndex:   16,
+						Paragraph: &docs.Paragraph{
+							ParagraphStyle: &docs.ParagraphStyle{NamedStyleType: "HEADING_1", HeadingId: "h.files"},
+							Elements: []*docs.ParagraphElement{{
+								StartIndex: 10,
+								EndIndex:   16,
+								TextRun:    &docs.TextRun{Content: "Files\n"},
+							}},
+						},
+					},
+					{
+						StartIndex: 17,
+						EndIndex:   22,
+						Paragraph: &docs.Paragraph{Elements: []*docs.ParagraphElement{{
+							StartIndex: 17,
+							EndIndex:   21,
+							TextRun: &docs.TextRun{
+								Content:   "Jump",
+								TextStyle: &docs.TextStyle{Link: &docs.Link{Url: "#attachments"}},
+							},
+						}}},
+					},
+				}},
+			})
+			return
+		case r.Method == http.MethodPost && strings.Contains(path, ":batchUpdate"):
+			var req docs.BatchUpdateDocumentRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				t.Fatalf("decode batch request: %v", err)
+			}
+			batchRequests = append(batchRequests, req.Requests)
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"documentId": "doc1"})
+			return
+		default:
+			http.NotFound(w, r)
+			return
+		}
+	}))
+	defer cleanup()
+
+	newDocsService = func(context.Context, string) (*docs.Service, error) { return docSvc, nil }
+	newDriveService = func(context.Context, string) (*drive.Service, error) {
+		t.Fatal("markdown append should not use Drive update")
+		return nil, errors.New("unexpected Drive service call")
+	}
+
+	flags := &RootFlags{Account: "a@b.com"}
+	ctx := newDocsJSONContext(t)
+
+	markdown := "# Files {#attachments}\n\n[Jump](#attachments)\n"
+	if err := runKong(t, &DocsWriteCmd{}, []string{"doc1", "--text=" + markdown, "--append", "--markdown"}, ctx, flags); err != nil {
+		t.Fatalf("markdown append write: %v", err)
+	}
+	if len(batchRequests) != 2 {
+		t.Fatalf("expected insert + link rewrite batches, got %d", len(batchRequests))
+	}
+	insertReqs := batchRequests[0]
+	if len(insertReqs) == 0 || insertReqs[0].InsertText == nil {
+		t.Fatalf("expected first batch to insert text, got %#v", insertReqs)
+	}
+	if got := insertReqs[0].InsertText; got.Location.Index != 9 || got.Text != "\nFiles\n\nJump\n" {
+		t.Fatalf("unexpected append insert: %#v", got)
+	}
+	rewriteReqs := batchRequests[1]
+	if len(rewriteReqs) != 1 || rewriteReqs[0].UpdateTextStyle == nil {
+		t.Fatalf("expected one link rewrite request, got %#v", rewriteReqs)
+	}
+	styleReq := rewriteReqs[0].UpdateTextStyle
+	if styleReq.Range.StartIndex != 17 || styleReq.Range.EndIndex != 21 {
+		t.Fatalf("unexpected rewrite range: %#v", styleReq.Range)
+	}
+	if styleReq.TextStyle == nil || styleReq.TextStyle.Link == nil || styleReq.TextStyle.Link.HeadingId != "h.files" {
+		t.Fatalf("unexpected link rewrite request: %#v", styleReq)
 	}
 }
 

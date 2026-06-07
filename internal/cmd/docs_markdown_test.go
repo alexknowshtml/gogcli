@@ -71,6 +71,76 @@ func TestParseMarkdown(t *testing.T) {
 	}
 }
 
+func TestParseMarkdown_ExplicitHeadingAnchor(t *testing.T) {
+	got := ParseMarkdown("# Files {#attachments}\n\n```md\n# Keep {#literal}\n```")
+	if len(got) != 3 {
+		t.Fatalf("ParseMarkdown() got %d elements, want 3: %#v", len(got), got)
+	}
+	if got[0].Content != "Files {#attachments}" || got[0].Anchor != "attachments" {
+		t.Fatalf("heading = content %q anchor %q, want unstripped content/attachments", got[0].Content, got[0].Anchor)
+	}
+	if got[2].Content != "# Keep {#literal}" {
+		t.Fatalf("code block anchor marker should stay literal, got %q", got[2].Content)
+	}
+}
+
+func TestParseMarkdown_ExplicitHeadingAnchorPandocIDs(t *testing.T) {
+	got := ParseMarkdown("# API {#_toc}\n## Unicode {#über}\n### Dash {#-api}")
+	if len(got) != 3 {
+		t.Fatalf("ParseMarkdown() got %d elements, want 3: %#v", len(got), got)
+	}
+	want := []string{"_toc", "über", "-api"}
+	for i, anchor := range want {
+		if got[i].Anchor != anchor {
+			t.Fatalf("heading %d anchor = %q, want %q", i, got[i].Anchor, anchor)
+		}
+	}
+	if stripped := stripMarkdownHeadingAnchors("# API {#_toc}\n## Unicode {#über}\n### Dash {#-api}\n"); stripped != "# API\n## Unicode\n### Dash\n" {
+		t.Fatalf("stripMarkdownHeadingAnchors() = %q", stripped)
+	}
+}
+
+func TestParseMarkdown_ExplicitHeadingAnchorInsideTildeFence(t *testing.T) {
+	got := ParseMarkdown("~~~md\n# Keep {#literal}\n~~~\n\n# Files {#attachments}")
+	if len(got) != 3 {
+		t.Fatalf("ParseMarkdown() got %d elements, want 3: %#v", len(got), got)
+	}
+	if got[0].Type != MDCodeBlock || got[0].Content != "# Keep {#literal}" {
+		t.Fatalf("code block = %#v, want literal anchor marker", got[0])
+	}
+	if got[2].Content != "Files {#attachments}" || got[2].Anchor != "attachments" {
+		t.Fatalf("heading = content %q anchor %q, want unstripped content/attachments", got[2].Content, got[2].Anchor)
+	}
+}
+
+func TestParseMarkdown_UnclosedTildeFenceRunsToEOF(t *testing.T) {
+	got := ParseMarkdown("~~~md\n# Keep {#literal}\nmore")
+	if len(got) != 1 {
+		t.Fatalf("ParseMarkdown() got %d elements, want 1: %#v", len(got), got)
+	}
+	if got[0].Type != MDCodeBlock || got[0].Content != "# Keep {#literal}\nmore" {
+		t.Fatalf("code block = %#v, want unclosed tilde fence content through EOF", got[0])
+	}
+}
+
+func TestStripMarkdownHeadingAnchors(t *testing.T) {
+	input := "# Files {#attachments}\n   ## Indented {#indented}\nSetext {#setext}\n---\n    code {#literal}\n    ---\n- list {#literal}\n---\n\n```md\n# Keep {#literal}\n```\n~~~md\n# Keep tilde {#literal}\n~~~\n   ```md\n# Keep indented {#literal}\n   ```\n## Other\n"
+	want := "# Files\n   ## Indented\nSetext\n---\n    code {#literal}\n    ---\n- list {#literal}\n---\n\n```md\n# Keep {#literal}\n```\n~~~md\n# Keep tilde {#literal}\n~~~\n   ```md\n# Keep indented {#literal}\n   ```\n## Other\n"
+	if got := stripMarkdownHeadingAnchors(input); got != want {
+		t.Fatalf("stripMarkdownHeadingAnchors() = %q, want %q", got, want)
+	}
+}
+
+func TestMarkdownImportExplicitHeadingAnchors_CountsDriveHeadings(t *testing.T) {
+	got := markdownImportExplicitHeadingAnchors("Files\n---\n\n   ## Files {#attachments}\n")
+	if len(got) != 1 {
+		t.Fatalf("markdownImportExplicitHeadingAnchors() got %d anchors, want 1: %#v", len(got), got)
+	}
+	if got[0].Anchor != "attachments" || got[0].Text != "Files" || got[0].Occurrence != 2 {
+		t.Fatalf("anchor = %#v, want attachments/Files occurrence 2", got[0])
+	}
+}
+
 func TestParseMarkdown_NestedLists(t *testing.T) {
 	result := ParseMarkdown("- Parent\n  - Child\n    - Grandchild\n\t- Tab sibling\n1. One\n  1. Nested one")
 	if len(result) != 6 {
@@ -400,6 +470,7 @@ func TestParseHeading(t *testing.T) {
 		{"## Subtitle", 2, "Subtitle"},
 		{"### Section", 3, "Section"},
 		{"#### Subsection", 4, "Subsection"},
+		{"   ### Indented", 3, "Indented"},
 		{"Not a heading", 0, ""},
 		{"#No space", 0, ""},
 	}

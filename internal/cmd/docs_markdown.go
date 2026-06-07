@@ -41,6 +41,7 @@ const (
 type MarkdownElement struct {
 	Type       MarkdownElementType
 	Content    string
+	Anchor     string // for headings: explicit Pandoc-style {#id}
 	Children   []MarkdownElement
 	URL        string     // for links
 	Level      int        // for headings and lists
@@ -76,6 +77,8 @@ func ParseMarkdown(text string) []MarkdownElement {
 	lines := strings.Split(text, "\n")
 
 	inCodeBlock := false
+	var codeFenceChar byte
+	var codeFenceLen int
 	var codeBlockContent strings.Builder
 	var listIndents []int
 	listActive := false
@@ -83,11 +86,18 @@ func ParseMarkdown(text string) []MarkdownElement {
 	for i := 0; i < len(lines); i++ {
 		line := lines[i]
 
-		// Handle code blocks
-		if strings.HasPrefix(line, "```") {
+		// Handle fenced code blocks.
+		if fenceChar, fenceLen, ok := markdownCodeFence(line); ok {
 			listIndents = nil
 			listActive = false
 			if inCodeBlock {
+				if fenceChar != codeFenceChar || fenceLen < codeFenceLen {
+					if codeBlockContent.Len() > 0 {
+						codeBlockContent.WriteString("\n")
+					}
+					codeBlockContent.WriteString(line)
+					continue
+				}
 				// End code block
 				elements = append(elements, MarkdownElement{
 					Type:    MDCodeBlock,
@@ -95,9 +105,13 @@ func ParseMarkdown(text string) []MarkdownElement {
 				})
 				codeBlockContent.Reset()
 				inCodeBlock = false
+				codeFenceChar = 0
+				codeFenceLen = 0
 			} else {
 				// Start code block
 				inCodeBlock = true
+				codeFenceChar = fenceChar
+				codeFenceLen = fenceLen
 			}
 			continue
 		}
@@ -134,6 +148,7 @@ func ParseMarkdown(text string) []MarkdownElement {
 		if headingLevel, content := parseHeading(line); headingLevel > 0 {
 			listIndents = nil
 			listActive = false
+			_, anchor := stripMarkdownHeadingAnchor(content)
 			headingType := MDHeading1
 			switch headingLevel {
 			case 1:
@@ -152,6 +167,8 @@ func ParseMarkdown(text string) []MarkdownElement {
 			elements = append(elements, MarkdownElement{
 				Type:    headingType,
 				Content: content,
+				Anchor:  anchor,
+				Level:   headingLevel,
 			})
 			continue
 		}
@@ -219,6 +236,13 @@ func ParseMarkdown(text string) []MarkdownElement {
 		elements = append(elements, MarkdownElement{
 			Type:    MDParagraph,
 			Content: line,
+		})
+	}
+
+	if inCodeBlock {
+		elements = append(elements, MarkdownElement{
+			Type:    MDCodeBlock,
+			Content: codeBlockContent.String(),
 		})
 	}
 
@@ -775,12 +799,337 @@ func nextRune(s string) (string, int) {
 }
 
 func parseHeading(line string) (int, string) {
-	headingRegex := regexp.MustCompile(`^(#{1,6})\s+(.+)$`)
-	match := headingRegex.FindStringSubmatch(line)
-	if match == nil {
+	prefix, content, ok := parseMarkdownATXHeadingLine(line)
+	if !ok {
 		return 0, ""
 	}
-	return len(match[1]), match[2]
+	hashes := strings.TrimSpace(prefix)
+	return len(hashes), content
+}
+
+var markdownHeadingAnchorRegex = regexp.MustCompile(`\s+\{#([^}\s]+)\}\s*$`)
+
+type markdownExplicitHeadingAnchor struct {
+	Anchor     string
+	Text       string
+	Occurrence int
+}
+
+type markdownSourceHeading struct {
+	Text   string
+	Anchor string
+}
+
+func stripMarkdownHeadingAnchor(content string) (string, string) {
+	match := markdownHeadingAnchorRegex.FindStringSubmatchIndex(content)
+	if match == nil {
+		return content, ""
+	}
+	anchor := content[match[2]:match[3]]
+	return strings.TrimSpace(content[:match[0]]), anchor
+}
+
+func stripMarkdownHeadingAnchors(markdown string) string {
+	lines := strings.SplitAfter(markdown, "\n")
+	inCodeBlock := false
+	var codeFenceChar byte
+	var codeFenceLen int
+	pendingSetextLine := -1
+	for i, line := range lines {
+		body, lineEnding := splitMarkdownLineEnding(line)
+		if fenceChar, fenceLen, ok := markdownCodeFence(body); ok {
+			pendingSetextLine = -1
+			if inCodeBlock {
+				if fenceChar == codeFenceChar && fenceLen >= codeFenceLen {
+					inCodeBlock = false
+					codeFenceChar = 0
+					codeFenceLen = 0
+				}
+			} else {
+				inCodeBlock = true
+				codeFenceChar = fenceChar
+				codeFenceLen = fenceLen
+			}
+			continue
+		}
+		if inCodeBlock {
+			continue
+		}
+
+		if prefix, content, ok := parseMarkdownATXHeadingLine(body); ok {
+			pendingSetextLine = -1
+			stripped, anchor := stripMarkdownHeadingAnchor(content)
+			if anchor == "" {
+				continue
+			}
+			lines[i] = prefix + stripped + lineEnding
+			continue
+		}
+
+		if isMarkdownSetextUnderline(body) {
+			if pendingSetextLine >= 0 {
+				prevBody, prevLineEnding := splitMarkdownLineEnding(lines[pendingSetextLine])
+				stripped, anchor := stripMarkdownHeadingAnchor(prevBody)
+				if anchor != "" {
+					lines[pendingSetextLine] = stripped + prevLineEnding
+				}
+			}
+			pendingSetextLine = -1
+			continue
+		}
+
+		if !isMarkdownSetextHeadingCandidate(body) {
+			pendingSetextLine = -1
+			continue
+		}
+		pendingSetextLine = i
+	}
+	return strings.Join(lines, "")
+}
+
+func markdownExplicitHeadingAnchors(markdown string) []markdownExplicitHeadingAnchor {
+	elements := ParseMarkdown(markdown)
+	anchors := make([]markdownExplicitHeadingAnchor, 0)
+	seen := map[string]int{}
+	for _, el := range elements {
+		if !isMarkdownHeadingElement(el.Type) {
+			continue
+		}
+		text := markdownHeadingSourceText(el.Content)
+		seen[text]++
+		anchor := strings.TrimSpace(el.Anchor)
+		if anchor == "" {
+			continue
+		}
+		anchors = append(anchors, markdownExplicitHeadingAnchor{
+			Anchor:     anchor,
+			Text:       text,
+			Occurrence: seen[text],
+		})
+	}
+	return anchors
+}
+
+func markdownImportExplicitHeadingAnchors(markdown string) []markdownExplicitHeadingAnchor {
+	headings := markdownImportHeadings(markdown)
+	anchors := make([]markdownExplicitHeadingAnchor, 0)
+	seen := map[string]int{}
+	for _, heading := range headings {
+		seen[heading.Text]++
+		if heading.Anchor == "" {
+			continue
+		}
+		anchors = append(anchors, markdownExplicitHeadingAnchor{
+			Anchor:     heading.Anchor,
+			Text:       heading.Text,
+			Occurrence: seen[heading.Text],
+		})
+	}
+	return anchors
+}
+
+func markdownImportHeadings(markdown string) []markdownSourceHeading {
+	var headings []markdownSourceHeading
+	lines := strings.Split(markdown, "\n")
+	inCodeBlock := false
+	var codeFenceChar byte
+	var codeFenceLen int
+	pendingSetextLine := ""
+	pendingSetext := false
+	for _, line := range lines {
+		body := strings.TrimSuffix(line, "\r")
+		if fenceChar, fenceLen, ok := markdownCodeFence(body); ok {
+			pendingSetext = false
+			if inCodeBlock {
+				if fenceChar == codeFenceChar && fenceLen >= codeFenceLen {
+					inCodeBlock = false
+					codeFenceChar = 0
+					codeFenceLen = 0
+				}
+			} else {
+				inCodeBlock = true
+				codeFenceChar = fenceChar
+				codeFenceLen = fenceLen
+			}
+			continue
+		}
+		if inCodeBlock {
+			continue
+		}
+		if _, content, ok := parseMarkdownATXHeadingLine(body); ok {
+			headings = append(headings, markdownSourceHeadingFromContent(content))
+			pendingSetext = false
+			continue
+		}
+		if isMarkdownSetextUnderline(body) {
+			if pendingSetext {
+				headings = append(headings, markdownSourceHeadingFromContent(pendingSetextLine))
+			}
+			pendingSetext = false
+			continue
+		}
+		if !isMarkdownSetextHeadingCandidate(body) {
+			pendingSetext = false
+			continue
+		}
+		pendingSetextLine = body
+		pendingSetext = true
+	}
+	return headings
+}
+
+func markdownSourceHeadingFromContent(content string) markdownSourceHeading {
+	stripped, anchor := stripMarkdownHeadingAnchor(content)
+	return markdownSourceHeading{
+		Text:   markdownHeadingSourceText(stripped),
+		Anchor: strings.TrimSpace(anchor),
+	}
+}
+
+func markdownHeadingSourceText(content string) string {
+	stripped, _ := stripMarkdownHeadingAnchor(content)
+	_, text := ParseInlineFormatting(stripped)
+	return markdownHeadingNormalizedText(text)
+}
+
+func markdownHeadingNormalizedText(text string) string {
+	return strings.Join(strings.Fields(strings.TrimSpace(text)), " ")
+}
+
+func splitMarkdownLineEnding(line string) (string, string) {
+	body := line
+	lineEnding := ""
+	if strings.HasSuffix(body, "\n") {
+		body = strings.TrimSuffix(body, "\n")
+		lineEnding = "\n"
+	}
+	if strings.HasSuffix(body, "\r") {
+		body = strings.TrimSuffix(body, "\r")
+		lineEnding = "\r" + lineEnding
+	}
+	return body, lineEnding
+}
+
+func parseMarkdownATXHeadingLine(line string) (string, string, bool) {
+	spaces := 0
+	for spaces < len(line) && line[spaces] == ' ' {
+		spaces++
+	}
+	if spaces > 3 || spaces >= len(line) || line[spaces] != '#' {
+		return "", "", false
+	}
+	hashEnd := spaces
+	for hashEnd < len(line) && line[hashEnd] == '#' {
+		hashEnd++
+	}
+	if hashEnd-spaces > 6 || hashEnd >= len(line) {
+		return "", "", false
+	}
+	if line[hashEnd] != ' ' && line[hashEnd] != '\t' {
+		return "", "", false
+	}
+	contentStart := hashEnd
+	for contentStart < len(line) && (line[contentStart] == ' ' || line[contentStart] == '\t') {
+		contentStart++
+	}
+	if contentStart >= len(line) {
+		return "", "", false
+	}
+	return line[:contentStart], line[contentStart:], true
+}
+
+func isMarkdownSetextUnderline(line string) bool {
+	if !markdownLineAllowsSetextIndent(line) {
+		return false
+	}
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" {
+		return false
+	}
+	ch := trimmed[0]
+	if ch != '=' && ch != '-' {
+		return false
+	}
+	for i := 0; i < len(trimmed); i++ {
+		if trimmed[i] != ch {
+			return false
+		}
+	}
+	return true
+}
+
+func isMarkdownSetextHeadingCandidate(line string) bool {
+	if !markdownLineAllowsSetextIndent(line) {
+		return false
+	}
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" {
+		return false
+	}
+	if strings.HasPrefix(trimmed, ">") || strings.HasPrefix(trimmed, "|") {
+		return false
+	}
+	if strings.HasPrefix(trimmed, "- ") || strings.HasPrefix(trimmed, "* ") || strings.HasPrefix(trimmed, "+ ") {
+		return false
+	}
+	if markdownNumberedListRE.MatchString(trimmed) {
+		return false
+	}
+	return true
+}
+
+func markdownLineAllowsSetextIndent(line string) bool {
+	spaces := 0
+	for spaces < len(line) && line[spaces] == ' ' {
+		spaces++
+	}
+	if spaces > 3 {
+		return false
+	}
+	return spaces >= len(line) || line[spaces] != '\t'
+}
+
+func isMarkdownHeadingElement(t MarkdownElementType) bool {
+	return t >= MDHeading1 && t <= MDHeading6
+}
+
+func stripMarkdownElementHeadingAnchors(elements []MarkdownElement) {
+	for i := range elements {
+		if isMarkdownHeadingElement(elements[i].Type) {
+			if stripped, anchor := stripMarkdownHeadingAnchor(elements[i].Content); anchor != "" {
+				elements[i].Content = stripped
+				elements[i].Anchor = anchor
+			}
+		}
+		if len(elements[i].Children) > 0 {
+			stripMarkdownElementHeadingAnchors(elements[i].Children)
+		}
+	}
+}
+
+func markdownCodeFence(line string) (byte, int, bool) {
+	i := 0
+	for i < len(line) && line[i] == ' ' && i < 3 {
+		i++
+	}
+	if i < len(line) && line[i] == ' ' {
+		return 0, 0, false
+	}
+	if i >= len(line) {
+		return 0, 0, false
+	}
+	ch := line[i]
+	if ch != '`' && ch != '~' {
+		return 0, 0, false
+	}
+	j := i
+	for j < len(line) && line[j] == ch {
+		j++
+	}
+	if j-i < 3 {
+		return 0, 0, false
+	}
+	return ch, j - i, true
 }
 
 func isHorizontalRule(line string) bool {

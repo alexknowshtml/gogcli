@@ -125,6 +125,127 @@ func TestDocsWrite_MarkdownReplaceWithTab(t *testing.T) {
 	}
 }
 
+func TestDocsWrite_MarkdownReplaceWithTabRewritesExplicitHeadingAnchorLinks(t *testing.T) {
+	origDocs := newDocsService
+	origDrive := newDriveService
+	t.Cleanup(func() {
+		newDocsService = origDocs
+		newDriveService = origDrive
+	})
+
+	var batchRequests [][]*docs.Request
+	var includeTabsCalls int
+	var getCalls int
+
+	docSvc, cleanup := newDocsServiceForTest(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		switch {
+		case r.Method == http.MethodGet && strings.HasPrefix(path, "/v1/documents/"):
+			if strings.Contains(r.URL.RawQuery, "includeTabsContent=true") {
+				includeTabsCalls++
+			}
+			getCalls++
+			w.Header().Set("Content-Type", "application/json")
+			if getCalls == 1 {
+				_ = json.NewEncoder(w).Encode(tabsDocWithEndIndex())
+				return
+			}
+			_ = json.NewEncoder(w).Encode(&docs.Document{
+				DocumentId: "doc1",
+				Tabs: []*docs.Tab{{
+					TabProperties: &docs.TabProperties{TabId: "t.second", Title: "Second"},
+					DocumentTab: &docs.DocumentTab{Body: &docs.Body{Content: []*docs.StructuralElement{
+						{
+							StartIndex: 1,
+							EndIndex:   7,
+							Paragraph: &docs.Paragraph{
+								ParagraphStyle: &docs.ParagraphStyle{NamedStyleType: "HEADING_1", HeadingId: "h.files"},
+								Elements: []*docs.ParagraphElement{{
+									StartIndex: 1,
+									EndIndex:   7,
+									TextRun:    &docs.TextRun{Content: "Files\n"},
+								}},
+							},
+						},
+						{
+							StartIndex: 8,
+							EndIndex:   13,
+							Paragraph: &docs.Paragraph{
+								Elements: []*docs.ParagraphElement{{
+									StartIndex: 8,
+									EndIndex:   12,
+									TextRun: &docs.TextRun{
+										Content:   "Jump",
+										TextStyle: &docs.TextStyle{Link: &docs.Link{Url: "#attachments"}},
+									},
+								}},
+							},
+						},
+					}}},
+				}},
+			})
+			return
+		case r.Method == http.MethodPost && strings.Contains(path, ":batchUpdate"):
+			var req docs.BatchUpdateDocumentRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				t.Fatalf("decode batch request: %v", err)
+			}
+			batchRequests = append(batchRequests, req.Requests)
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"documentId": "doc1"})
+			return
+		default:
+			http.NotFound(w, r)
+			return
+		}
+	}))
+	defer cleanup()
+
+	newDocsService = func(context.Context, string) (*docs.Service, error) { return docSvc, nil }
+	newDriveService = func(context.Context, string) (*drive.Service, error) {
+		t.Fatal("markdown replace with --tab must not use the Drive converter")
+		return nil, errors.New("unexpected Drive service call")
+	}
+
+	flags := &RootFlags{Account: "a@b.com"}
+	ctx := newDocsJSONContext(t)
+
+	markdown := "# Files {#attachments}\n\n[Jump](#attachments)\n"
+	if err := runKong(t, &DocsWriteCmd{}, []string{
+		"doc1", "--text", markdown, "--replace", "--markdown", "--tab", "Second",
+	}, ctx, flags); err != nil {
+		t.Fatalf("markdown replace with tab: %v", err)
+	}
+
+	if includeTabsCalls != 2 {
+		t.Fatalf("expected 2 tab-aware GETs, got %d", includeTabsCalls)
+	}
+	if len(batchRequests) != 3 {
+		t.Fatalf("expected delete + insert + link rewrite batches, got %d", len(batchRequests))
+	}
+	insertReqs := batchRequests[1]
+	if len(insertReqs) == 0 || insertReqs[0].InsertText == nil {
+		t.Fatalf("expected insert batch, got %#v", insertReqs)
+	}
+	if got := insertReqs[0].InsertText.Text; got != "Files\n\nJump\n" {
+		t.Fatalf("inserted text = %q, want explicit anchor stripped", got)
+	}
+	rewriteReqs := batchRequests[2]
+	if len(rewriteReqs) != 1 || rewriteReqs[0].UpdateTextStyle == nil {
+		t.Fatalf("expected one link rewrite request, got %#v", rewriteReqs)
+	}
+	styleReq := rewriteReqs[0].UpdateTextStyle
+	if styleReq.Range.TabId != "t.second" || styleReq.Range.StartIndex != 8 || styleReq.Range.EndIndex != 12 {
+		t.Fatalf("unexpected rewrite range: %#v", styleReq.Range)
+	}
+	if styleReq.TextStyle == nil || styleReq.TextStyle.Link == nil ||
+		styleReq.TextStyle.Link.Heading == nil ||
+		styleReq.TextStyle.Link.Heading.Id != "h.files" ||
+		styleReq.TextStyle.Link.Heading.TabId != "t.second" {
+		t.Fatalf("unexpected heading link target: %#v", styleReq.TextStyle)
+	}
+}
+
 func TestDocsWrite_MarkdownReplaceWithTab_NestedLists(t *testing.T) {
 	origDocs := newDocsService
 	origDrive := newDriveService
