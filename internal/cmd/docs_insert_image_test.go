@@ -14,6 +14,8 @@ import (
 )
 
 func TestDocsInsertImageResolveSourceURL(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name string
 		cmd  DocsInsertImageCmd
@@ -30,6 +32,8 @@ func TestDocsInsertImageResolveSourceURL(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			_, err := tt.cmd.resolveSource()
 			if err == nil || !strings.Contains(err.Error(), tt.want) {
 				t.Fatalf("resolveSource() error = %v, want %q", err, tt.want)
@@ -47,8 +51,7 @@ func TestDocsInsertImageResolveSourceURL(t *testing.T) {
 }
 
 func TestDocsInsertImageURLRunSkipsDrive(t *testing.T) {
-	origDocs := newDocsService
-	t.Cleanup(func() { newDocsService = origDocs })
+	t.Parallel()
 
 	var got docs.BatchUpdateDocumentRequest
 	docSvc, cleanup := newDocsServiceForTest(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -66,7 +69,6 @@ func TestDocsInsertImageURLRunSkipsDrive(t *testing.T) {
 		}
 	}))
 	defer cleanup()
-	newDocsService = func(context.Context, string) (*docs.Service, error) { return docSvc, nil }
 	driveFactory := func(context.Context, string) (*drive.Service, error) {
 		t.Fatal("URL insertion must not create a Drive service")
 		return nil, errors.New("unexpected Drive service call")
@@ -74,6 +76,7 @@ func TestDocsInsertImageURLRunSkipsDrive(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 	ctx := withDriveTestServiceFactory(newCmdRuntimeJSONOutputContext(t, &stdout, &stderr), driveFactory)
+	ctx = withDocsTestService(ctx, docSvc)
 	runErr := runKong(t, &DocsInsertImageCmd{}, []string{
 		"doc1",
 		"--url", "https://example.com/image.png?sig=abc",
@@ -107,9 +110,9 @@ func TestDocsInsertImageURLRunSkipsDrive(t *testing.T) {
 }
 
 func TestDocsInsertImageURLDryRunSkipsServices(t *testing.T) {
-	origDocs := newDocsService
-	t.Cleanup(func() { newDocsService = origDocs })
-	newDocsService = func(context.Context, string) (*docs.Service, error) {
+	t.Parallel()
+
+	docsFactory := func(context.Context, string) (*docs.Service, error) {
 		t.Fatal("dry-run must not create a Docs service")
 		return nil, errors.New("unexpected Docs service call")
 	}
@@ -120,6 +123,7 @@ func TestDocsInsertImageURLDryRunSkipsServices(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 	ctx := withDriveTestServiceFactory(newCmdRuntimeJSONOutputContext(t, &stdout, &stderr), driveFactory)
+	ctx = withDocsTestServiceFactory(ctx, docsFactory)
 	err := runKong(t, &DocsInsertImageCmd{}, []string{
 		"doc1",
 		"--url", "https://example.com/image.png",
