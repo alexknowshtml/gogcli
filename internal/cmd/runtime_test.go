@@ -23,6 +23,7 @@ import (
 	"google.golang.org/api/slides/v1"
 
 	"github.com/steipete/gogcli/internal/app"
+	"github.com/steipete/gogcli/internal/googleapi"
 )
 
 func TestExecuteRuntimeRoutesMigratedCommandOutput(t *testing.T) {
@@ -143,6 +144,76 @@ func TestCloudIdentityServiceUsesRuntimeFactory(t *testing.T) {
 	}
 	if gotAccount != "test@example.com" {
 		t.Fatalf("factory account = %q, want test@example.com", gotAccount)
+	}
+}
+
+func TestPhotosServiceUsesRuntimeFactory(t *testing.T) {
+	t.Parallel()
+
+	want := &googleapi.PhotosClient{}
+	var gotAccount string
+	runtime := &app.Runtime{Services: app.Services{
+		Photos: func(_ context.Context, account string) (*googleapi.PhotosClient, error) {
+			gotAccount = account
+			return want, nil
+		},
+	}}
+	ctx := app.WithRuntime(context.Background(), runtime)
+
+	got, err := photosService(ctx, "test@example.com")
+	if err != nil {
+		t.Fatalf("photosService() error = %v", err)
+	}
+	if got != want {
+		t.Fatalf("photosService() = %p, want %p", got, want)
+	}
+	if gotAccount != "test@example.com" {
+		t.Fatalf("factory account = %q, want test@example.com", gotAccount)
+	}
+}
+
+func TestPhotosPickerServiceUsesRuntimeFactory(t *testing.T) {
+	t.Parallel()
+
+	want := &googleapi.PhotosPickerClient{}
+	var gotAccount string
+	runtime := &app.Runtime{Services: app.Services{
+		PhotosPicker: func(_ context.Context, account string) (*googleapi.PhotosPickerClient, error) {
+			gotAccount = account
+			return want, nil
+		},
+	}}
+	ctx := app.WithRuntime(context.Background(), runtime)
+
+	got, err := photosPickerService(ctx, "test@example.com")
+	if err != nil {
+		t.Fatalf("photosPickerService() error = %v", err)
+	}
+	if got != want {
+		t.Fatalf("photosPickerService() = %p, want %p", got, want)
+	}
+	if gotAccount != "test@example.com" {
+		t.Fatalf("factory account = %q, want test@example.com", gotAccount)
+	}
+}
+
+func TestOpenURLUsesRuntimeOperation(t *testing.T) {
+	t.Parallel()
+
+	var gotURI string
+	runtime := &app.Runtime{Services: app.Services{
+		OpenURL: func(uri string) error {
+			gotURI = uri
+			return nil
+		},
+	}}
+	ctx := app.WithRuntime(context.Background(), runtime)
+
+	if err := openURL(ctx, "https://example.com/picker"); err != nil {
+		t.Fatalf("openURL() error = %v", err)
+	}
+	if gotURI != "https://example.com/picker" {
+		t.Fatalf("URI = %q, want picker URI", gotURI)
 	}
 }
 

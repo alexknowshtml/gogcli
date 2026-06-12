@@ -54,6 +54,8 @@ func newDefaultRuntime() *app.Runtime {
 			PeopleContacts:  googleapi.NewPeopleContacts,
 			PeopleDirectory: googleapi.NewPeopleDirectory,
 			PeopleOther:     googleapi.NewPeopleOtherContacts,
+			Photos:          newPhotosClient,
+			PhotosPicker:    newPhotosPickerClient,
 			SearchConsole:   googleapi.NewSearchConsole,
 			Sheets:          googleapi.NewSheets,
 			Slides:          googleapi.NewSlides,
@@ -61,6 +63,7 @@ func newDefaultRuntime() *app.Runtime {
 			Zoom:            newZoomMeetingClient,
 			DriveDownload:   driveDownload,
 			DriveExport:     driveExportDownload,
+			OpenURL:         openPhotosPickerBrowser,
 		},
 	}
 }
@@ -128,6 +131,12 @@ func normalizedRuntime(runtime *app.Runtime) *app.Runtime {
 	if normalized.Services.PeopleOther == nil {
 		normalized.Services.PeopleOther = defaults.Services.PeopleOther
 	}
+	if normalized.Services.Photos == nil {
+		normalized.Services.Photos = defaults.Services.Photos
+	}
+	if normalized.Services.PhotosPicker == nil {
+		normalized.Services.PhotosPicker = defaults.Services.PhotosPicker
+	}
 	if normalized.Services.SearchConsole == nil {
 		normalized.Services.SearchConsole = defaults.Services.SearchConsole
 	}
@@ -148,6 +157,9 @@ func normalizedRuntime(runtime *app.Runtime) *app.Runtime {
 	}
 	if normalized.Services.DriveExport == nil {
 		normalized.Services.DriveExport = defaults.Services.DriveExport
+	}
+	if normalized.Services.OpenURL == nil {
+		normalized.Services.OpenURL = defaults.Services.OpenURL
 	}
 	return &normalized
 }
@@ -230,6 +242,27 @@ func cloudIdentityService(ctx context.Context, account string) (*cloudidentity.S
 		return runtime.Services.CloudIdentity(ctx, account)
 	}
 	return googleapi.NewCloudIdentityGroups(ctx, account)
+}
+
+func photosService(ctx context.Context, account string) (*googleapi.PhotosClient, error) {
+	if runtime, ok := app.FromContext(ctx); ok && runtime.Services.Photos != nil {
+		return runtime.Services.Photos(ctx, account)
+	}
+	return newPhotosClient(ctx, account)
+}
+
+func photosPickerService(ctx context.Context, account string) (*googleapi.PhotosPickerClient, error) {
+	if runtime, ok := app.FromContext(ctx); ok && runtime.Services.PhotosPicker != nil {
+		return runtime.Services.PhotosPicker(ctx, account)
+	}
+	return newPhotosPickerClient(ctx, account)
+}
+
+func openURL(ctx context.Context, uri string) error {
+	if runtime, ok := app.FromContext(ctx); ok && runtime.Services.OpenURL != nil {
+		return runtime.Services.OpenURL(uri)
+	}
+	return openPhotosPickerBrowser(uri)
 }
 
 func driveService(ctx context.Context, account string) (*drive.Service, error) {

@@ -82,7 +82,7 @@ func (c *PhotosPickerCreateCmd) Run(ctx context.Context, flags *RootFlags) error
 		return err
 	}
 	if c.Open && strings.TrimSpace(session.PickerURI) != "" {
-		return openPhotosPickerBrowser(session.PickerURI)
+		return openURL(ctx, session.PickerURI)
 	}
 	return nil
 }
@@ -208,7 +208,7 @@ func (c *PhotosPickerDownloadCmd) Run(ctx context.Context, flags *RootFlags) err
 	defer resp.Body.Close()
 
 	if isStdoutPath(c.Out) {
-		_, err = io.Copy(os.Stdout, resp.Body)
+		_, err = io.Copy(stdoutWriter(ctx), resp.Body)
 		return err
 	}
 	filename := ""
@@ -371,7 +371,7 @@ func requirePhotosPickerClient(ctx context.Context, flags *RootFlags) (*googleap
 	if err != nil {
 		return nil, err
 	}
-	return newPhotosPickerClient(ctx, account)
+	return photosPickerService(ctx, account)
 }
 
 func requirePhotosPickerSessionID(raw string) (string, error) {
@@ -407,7 +407,7 @@ func writePhotosPickerSession(ctx context.Context, session *googleapi.PhotosPick
 		session = &googleapi.PhotosPickerSession{}
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"session": session})
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{"session": session})
 	}
 	u := ui.FromContext(ctx)
 	u.Out().Linef("id\t%s", session.ID)
@@ -432,7 +432,7 @@ func writePhotosPickerMediaItems(
 	nextPageToken string,
 ) error {
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{
 			"sessionId":      sessionID,
 			"mediaItems":     items,
 			"mediaItemCount": len(items),

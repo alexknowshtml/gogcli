@@ -164,7 +164,7 @@ func (c *PhotosDownloadCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if isStdoutPath(c.Out) {
-		_, err = io.Copy(os.Stdout, resp.Body)
+		_, err = io.Copy(stdoutWriter(ctx), resp.Body)
 		return err
 	}
 	dest, err := resolvePhotosDownloadDestPath(item, c.Out)
@@ -199,7 +199,7 @@ func requirePhotosClient(ctx context.Context, flags *RootFlags) (*googleapi.Phot
 	if err != nil {
 		return nil, err
 	}
-	client, err := newPhotosClient(ctx, account)
+	client, err := photosService(ctx, account)
 	if err != nil {
 		return nil, err
 	}
@@ -244,7 +244,7 @@ func writePhotosMediaItems(ctx context.Context, resp *googleapi.PhotosMediaItems
 		resp = &googleapi.PhotosMediaItemsResponse{}
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{
 			"mediaItems":     resp.MediaItems,
 			"mediaItemCount": len(resp.MediaItems),
 			"nextPageToken":  resp.NextPageToken,
@@ -273,7 +273,7 @@ func writePhotosMediaItems(ctx context.Context, resp *googleapi.PhotosMediaItems
 func writePhotosMediaItem(ctx context.Context, item *googleapi.PhotosMediaItem) error {
 	u := ui.FromContext(ctx)
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"mediaItem": item})
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{"mediaItem": item})
 	}
 	if item == nil {
 		u.Err().Println("No media item")
