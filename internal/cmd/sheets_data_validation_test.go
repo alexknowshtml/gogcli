@@ -14,6 +14,7 @@ import (
 	"google.golang.org/api/sheets/v4"
 
 	"github.com/steipete/gogcli/internal/outfmt"
+	"github.com/steipete/gogcli/internal/sheetsvalidation"
 )
 
 func TestBuildDataValidationCondition(t *testing.T) {
@@ -43,13 +44,10 @@ func TestBuildDataValidationCondition(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			condition, err := buildDataValidationCondition(tt.kind, tt.values)
+			condition, err := sheetsvalidation.BuildCondition(tt.kind, tt.values)
 			if tt.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 					t.Fatalf("expected %q error, got %v", tt.wantErr, err)
-				}
-				if got := ExitCode(err); got != 2 {
-					t.Fatalf("ExitCode = %d, want 2", got)
 				}
 				return
 			}
@@ -273,12 +271,12 @@ func TestBuildTableValidationClearRequests(t *testing.T) {
 		EndCol:      9,
 		Columns:     columns,
 		Rule: &sheets.DataValidationRule{
-			Condition:    cloneBooleanCondition(columns[0].DataValidationRule.Condition),
+			Condition:    sheetsvalidation.CloneCondition(columns[0].DataValidationRule.Condition),
 			ShowCustomUi: true,
 		},
 	}}
 
-	requests, err := buildTableValidationClearRequests(&sheets.GridRange{
+	requests, err := sheetsvalidation.BuildClearRequests(&sheets.GridRange{
 		SheetId:          7,
 		StartRowIndex:    1,
 		EndRowIndex:      4,
@@ -310,7 +308,7 @@ func TestBuildTableValidationClearRequests(t *testing.T) {
 		t.Fatalf("untouched column = %#v", got)
 	}
 
-	_, err = buildTableValidationClearRequests(&sheets.GridRange{
+	_, err = sheetsvalidation.BuildClearRequests(&sheets.GridRange{
 		SheetId:          7,
 		StartRowIndex:    1,
 		EndRowIndex:      3,
@@ -339,7 +337,7 @@ func TestBuildTableValidationSetRequests(t *testing.T) {
 		EndCol:      9,
 		Columns:     columns,
 		Rule: &sheets.DataValidationRule{
-			Condition:    cloneBooleanCondition(columns[0].DataValidationRule.Condition),
+			Condition:    sheetsvalidation.CloneCondition(columns[0].DataValidationRule.Condition),
 			ShowCustomUi: true,
 		},
 	}}
@@ -355,7 +353,7 @@ func TestBuildTableValidationSetRequests(t *testing.T) {
 		Type:   "ONE_OF_LIST",
 		Values: []*sheets.ConditionValue{{UserEnteredValue: "new"}},
 	}
-	requests, err := buildTableValidationSetRequests(target, spans, listCondition)
+	requests, err := sheetsvalidation.BuildSetRequests(target, spans, listCondition)
 	if err != nil {
 		t.Fatalf("set requests: %v", err)
 	}
@@ -368,7 +366,7 @@ func TestBuildTableValidationSetRequests(t *testing.T) {
 		t.Fatalf("updated dropdown = %#v", updated)
 	}
 
-	requests, err = buildTableValidationSetRequests(target, spans, &sheets.BooleanCondition{
+	requests, err = sheetsvalidation.BuildSetRequests(target, spans, &sheets.BooleanCondition{
 		Type:   "NUMBER_GREATER",
 		Values: []*sheets.ConditionValue{{UserEnteredValue: "0"}},
 	})
@@ -387,7 +385,7 @@ func TestBuildTableValidationSetRequests(t *testing.T) {
 		EndCol:      10,
 		Columns:     columns,
 	})
-	requests, err = buildTableValidationSetRequests(&sheets.GridRange{
+	requests, err = sheetsvalidation.BuildSetRequests(&sheets.GridRange{
 		SheetId:          7,
 		StartRowIndex:    1,
 		EndRowIndex:      4,
@@ -403,7 +401,7 @@ func TestBuildTableValidationSetRequests(t *testing.T) {
 		t.Fatalf("updated text table column = %#v", updated)
 	}
 
-	requests, err = buildTableValidationSetRequests(&sheets.GridRange{
+	requests, err = sheetsvalidation.BuildSetRequests(&sheets.GridRange{
 		SheetId:          7,
 		StartRowIndex:    1,
 		EndRowIndex:      3,
@@ -417,7 +415,7 @@ func TestBuildTableValidationSetRequests(t *testing.T) {
 		t.Fatalf("expected partial text table condition error, got requests=%#v err=%v", requests, err)
 	}
 
-	_, err = buildTableValidationSetRequests(&sheets.GridRange{
+	_, err = sheetsvalidation.BuildSetRequests(&sheets.GridRange{
 		SheetId:          7,
 		StartRowIndex:    1,
 		EndRowIndex:      3,
@@ -503,7 +501,7 @@ func TestSubtractTableValidationSpans(t *testing.T) {
 		StartColumnIndex: 8,
 		EndColumnIndex:   11,
 	}
-	ranges := subtractTableValidationSpans(target, []tableValidationSpan{{
+	ranges := sheetsvalidation.SubtractSpans(target, []tableValidationSpan{{
 		SheetID:  7,
 		StartRow: 1,
 		EndRow:   4,
@@ -522,7 +520,7 @@ func TestSubtractTableValidationSpans(t *testing.T) {
 		t.Fatalf("right range = %#v", got)
 	}
 
-	if got := subtractTableValidationSpans(&sheets.GridRange{
+	if got := sheetsvalidation.SubtractSpans(&sheets.GridRange{
 		SheetId:          7,
 		StartRowIndex:    1,
 		EndRowIndex:      4,
@@ -700,7 +698,7 @@ func TestBuildTableValidationCopyRequestsUpdatesDestinationTable(t *testing.T) {
 			EndCol:      9,
 			Columns:     sourceColumns,
 			Rule: &sheets.DataValidationRule{
-				Condition:    cloneBooleanCondition(sourceColumns[0].DataValidationRule.Condition),
+				Condition:    sheetsvalidation.CloneCondition(sourceColumns[0].DataValidationRule.Condition),
 				ShowCustomUi: true,
 			},
 		},
@@ -714,7 +712,7 @@ func TestBuildTableValidationCopyRequestsUpdatesDestinationTable(t *testing.T) {
 			EndCol:      11,
 			Columns:     destinationColumns,
 			Rule: &sheets.DataValidationRule{
-				Condition:    cloneBooleanCondition(destinationColumns[0].DataValidationRule.Condition),
+				Condition:    sheetsvalidation.CloneCondition(destinationColumns[0].DataValidationRule.Condition),
 				ShowCustomUi: true,
 			},
 		},
