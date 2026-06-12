@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -25,8 +25,7 @@ func docBodyWithEndIndex(end int64) map[string]any {
 }
 
 func TestDocsInsertCmd_DefaultsToEndOfDoc(t *testing.T) {
-	origDocs := newDocsService
-	t.Cleanup(func() { newDocsService = origDocs })
+	t.Parallel()
 
 	var batchRequests [][]*docs.Request
 	var getCalls int
@@ -50,10 +49,9 @@ func TestDocsInsertCmd_DefaultsToEndOfDoc(t *testing.T) {
 		}
 	}))
 	defer cleanup()
-	newDocsService = func(context.Context, string) (*docs.Service, error) { return docSvc, nil }
 
 	flags := &RootFlags{Account: "a@b.com"}
-	ctx := newDocsCmdContext(t)
+	ctx := withDocsTestService(newCmdRuntimeOutputContext(t, io.Discard, io.Discard), docSvc)
 
 	if err := runKong(t, &DocsInsertCmd{}, []string{"doc1", "hello"}, ctx, flags); err != nil {
 		t.Fatalf("insert: %v", err)
@@ -76,8 +74,7 @@ func TestDocsInsertCmd_DefaultsToEndOfDoc(t *testing.T) {
 }
 
 func TestDocsInsertCmd_ExplicitIndexSkipsGet(t *testing.T) {
-	origDocs := newDocsService
-	t.Cleanup(func() { newDocsService = origDocs })
+	t.Parallel()
 
 	var batchRequests [][]*docs.Request
 	var getCalls int
@@ -101,10 +98,9 @@ func TestDocsInsertCmd_ExplicitIndexSkipsGet(t *testing.T) {
 		}
 	}))
 	defer cleanup()
-	newDocsService = func(context.Context, string) (*docs.Service, error) { return docSvc, nil }
 
 	flags := &RootFlags{Account: "a@b.com"}
-	ctx := newDocsCmdContext(t)
+	ctx := withDocsTestService(newCmdRuntimeOutputContext(t, io.Discard, io.Discard), docSvc)
 
 	if err := runKong(t, &DocsInsertCmd{}, []string{"doc1", "hello", "--index", "7"}, ctx, flags); err != nil {
 		t.Fatalf("insert: %v", err)
@@ -119,17 +115,15 @@ func TestDocsInsertCmd_ExplicitIndexSkipsGet(t *testing.T) {
 }
 
 func TestDocsInsertCmd_ExplicitIndexBelowOneRejected(t *testing.T) {
-	origDocs := newDocsService
-	t.Cleanup(func() { newDocsService = origDocs })
+	t.Parallel()
 
 	docSvc, cleanup := newDocsServiceForTest(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 	}))
 	defer cleanup()
-	newDocsService = func(context.Context, string) (*docs.Service, error) { return docSvc, nil }
 
 	flags := &RootFlags{Account: "a@b.com"}
-	ctx := newDocsCmdContext(t)
+	ctx := withDocsTestService(newCmdRuntimeOutputContext(t, io.Discard, io.Discard), docSvc)
 
 	err := runKong(t, &DocsInsertCmd{}, []string{"doc1", "hello", "--index", "0"}, ctx, flags)
 	if err == nil || !strings.Contains(err.Error(), "--index must be >= 1") {

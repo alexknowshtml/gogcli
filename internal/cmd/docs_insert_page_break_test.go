@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -22,8 +22,7 @@ func pageBreakDocWithEndIndex(end int64) map[string]any {
 }
 
 func TestDocsInsertPageBreakCmd_ExplicitIndex(t *testing.T) {
-	origDocs := newDocsService
-	t.Cleanup(func() { newDocsService = origDocs })
+	t.Parallel()
 
 	var batchRequests [][]*docs.Request
 	var getCalls int
@@ -47,10 +46,9 @@ func TestDocsInsertPageBreakCmd_ExplicitIndex(t *testing.T) {
 		}
 	}))
 	defer cleanup()
-	newDocsService = func(context.Context, string) (*docs.Service, error) { return docSvc, nil }
 
 	flags := &RootFlags{Account: "a@b.com"}
-	ctx := newDocsCmdContext(t)
+	ctx := withDocsTestService(newCmdRuntimeOutputContext(t, io.Discard, io.Discard), docSvc)
 
 	if err := runKong(t, &DocsInsertPageBreakCmd{}, []string{"doc1", "--index", "7"}, ctx, flags); err != nil {
 		t.Fatalf("insert-page-break: %v", err)
@@ -72,8 +70,7 @@ func TestDocsInsertPageBreakCmd_ExplicitIndex(t *testing.T) {
 }
 
 func TestDocsInsertPageBreakCmd_DefaultsToEndOfDoc(t *testing.T) {
-	origDocs := newDocsService
-	t.Cleanup(func() { newDocsService = origDocs })
+	t.Parallel()
 
 	var batchRequests [][]*docs.Request
 	var getCalls int
@@ -97,10 +94,9 @@ func TestDocsInsertPageBreakCmd_DefaultsToEndOfDoc(t *testing.T) {
 		}
 	}))
 	defer cleanup()
-	newDocsService = func(context.Context, string) (*docs.Service, error) { return docSvc, nil }
 
 	flags := &RootFlags{Account: "a@b.com"}
-	ctx := newDocsCmdContext(t)
+	ctx := withDocsTestService(newCmdRuntimeOutputContext(t, io.Discard, io.Discard), docSvc)
 
 	if err := runKong(t, &DocsInsertPageBreakCmd{}, []string{"doc1"}, ctx, flags); err != nil {
 		t.Fatalf("insert-page-break: %v", err)
@@ -119,8 +115,7 @@ func TestDocsInsertPageBreakCmd_DefaultsToEndOfDoc(t *testing.T) {
 }
 
 func TestDocsInsertPageBreakCmd_AtEndFlag(t *testing.T) {
-	origDocs := newDocsService
-	t.Cleanup(func() { newDocsService = origDocs })
+	t.Parallel()
 
 	var batchRequests [][]*docs.Request
 	var getCalls int
@@ -144,10 +139,9 @@ func TestDocsInsertPageBreakCmd_AtEndFlag(t *testing.T) {
 		}
 	}))
 	defer cleanup()
-	newDocsService = func(context.Context, string) (*docs.Service, error) { return docSvc, nil }
 
 	flags := &RootFlags{Account: "a@b.com"}
-	ctx := newDocsCmdContext(t)
+	ctx := withDocsTestService(newCmdRuntimeOutputContext(t, io.Discard, io.Discard), docSvc)
 
 	if err := runKong(t, &DocsInsertPageBreakCmd{}, []string{"doc1", "--at-end"}, ctx, flags); err != nil {
 		t.Fatalf("insert-page-break: %v", err)
@@ -162,8 +156,10 @@ func TestDocsInsertPageBreakCmd_AtEndFlag(t *testing.T) {
 }
 
 func TestDocsInsertPageBreakCmd_AtEndAndIndexRejected(t *testing.T) {
+	t.Parallel()
+
 	flags := &RootFlags{Account: "a@b.com"}
-	ctx := newDocsCmdContext(t)
+	ctx := newCmdRuntimeOutputContext(t, io.Discard, io.Discard)
 	err := runKong(t, &DocsInsertPageBreakCmd{}, []string{"doc1", "--at-end", "--index", "5"}, ctx, flags)
 	if err == nil || !strings.Contains(err.Error(), "mutually exclusive") {
 		t.Fatalf("expected mutual-exclusion error, got %v", err)
@@ -171,8 +167,10 @@ func TestDocsInsertPageBreakCmd_AtEndAndIndexRejected(t *testing.T) {
 }
 
 func TestDocsInsertPageBreakCmd_NegativeIndexRejected(t *testing.T) {
+	t.Parallel()
+
 	flags := &RootFlags{Account: "a@b.com"}
-	ctx := newDocsCmdContext(t)
+	ctx := newCmdRuntimeOutputContext(t, io.Discard, io.Discard)
 	err := runKong(t, &DocsInsertPageBreakCmd{}, []string{"doc1", "--index=-1"}, ctx, flags)
 	if err == nil || !strings.Contains(err.Error(), "--index must be >= 1") {
 		t.Fatalf("expected --index validation error, got %v", err)
@@ -180,8 +178,10 @@ func TestDocsInsertPageBreakCmd_NegativeIndexRejected(t *testing.T) {
 }
 
 func TestDocsInsertPageBreakCmd_ZeroIndexRejected(t *testing.T) {
+	t.Parallel()
+
 	flags := &RootFlags{Account: "a@b.com"}
-	ctx := newDocsCmdContext(t)
+	ctx := newCmdRuntimeOutputContext(t, io.Discard, io.Discard)
 	err := runKong(t, &DocsInsertPageBreakCmd{}, []string{"doc1", "--index", "0"}, ctx, flags)
 	if err == nil || !strings.Contains(err.Error(), "--index must be >= 1") {
 		t.Fatalf("expected --index validation error, got %v", err)
@@ -189,8 +189,7 @@ func TestDocsInsertPageBreakCmd_ZeroIndexRejected(t *testing.T) {
 }
 
 func TestDocsInsertPageBreakCmd_WithTab(t *testing.T) {
-	origDocs := newDocsService
-	t.Cleanup(func() { newDocsService = origDocs })
+	t.Parallel()
 
 	var batchRequests [][]*docs.Request
 
@@ -212,10 +211,9 @@ func TestDocsInsertPageBreakCmd_WithTab(t *testing.T) {
 		}
 	}))
 	defer cleanup()
-	newDocsService = func(context.Context, string) (*docs.Service, error) { return docSvc, nil }
 
 	flags := &RootFlags{Account: "a@b.com"}
-	ctx := newDocsCmdContext(t)
+	ctx := withDocsTestService(newCmdRuntimeOutputContext(t, io.Discard, io.Discard), docSvc)
 
 	if err := runKong(t, &DocsInsertPageBreakCmd{}, []string{"doc1", "--index", "5", "--tab", "Second"}, ctx, flags); err != nil {
 		t.Fatalf("insert-page-break: %v", err)
