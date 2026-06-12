@@ -36,9 +36,10 @@ Assumptions:
 make ci
 ```
 
-Confirm GitHub Actions `ci` is green for the commit you’re tagging:
+After pushing the tag, confirm GitHub Actions `ci` is green for the exact tag
+commit:
 ```sh
-gh run list -L 5 --branch main
+gh run list -L 5 --branch vX.Y.Z
 ```
 
 ## 2) Update changelog

@@ -11,6 +11,7 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
 
 repo="$(gh repo view --json nameWithOwner -q .nameWithOwner)"
+tag_sha="$(git rev-list -n1 "v$version")"
 
 changelog="CHANGELOG.md"
 if ! rg -q "^## ${version} - " "$changelog"; then
@@ -46,15 +47,15 @@ if [[ "$assets_count" -eq 0 ]]; then
   exit 2
 fi
 
-release_run_id="$(gh api "repos/$repo/actions/runs" --jq ".workflow_runs[] | select(.name==\"release\") | select(.head_branch==\"v$version\") | select(.conclusion==\"success\") | .id" | head -n1)"
+release_run_id="$(gh api "repos/$repo/actions/runs" --jq ".workflow_runs[] | select(.name==\"release\") | select(.head_branch==\"v$version\") | select(.head_sha==\"$tag_sha\") | select(.conclusion==\"success\") | .id" | head -n1)"
 if [[ -z "$release_run_id" ]]; then
   echo "release workflow not green for v$version" >&2
   exit 2
 fi
 
-ci_ok="$(gh api "repos/$repo/actions/runs" --jq '.workflow_runs[] | select(.name=="ci") | select(.head_branch=="main") | .conclusion // ""' | head -n1)"
-if [[ "$ci_ok" != "success" ]]; then
-  echo "CI not green for main" >&2
+ci_run_id="$(gh api "repos/$repo/actions/runs" --jq ".workflow_runs[] | select(.name==\"ci\") | select(.head_branch==\"v$version\") | select(.head_sha==\"$tag_sha\") | select(.conclusion==\"success\") | .id" | head -n1)"
+if [[ -z "$ci_run_id" ]]; then
+  echo "CI not green for v$version at $tag_sha" >&2
   exit 2
 fi
 
