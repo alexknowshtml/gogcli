@@ -9,19 +9,21 @@ import (
 	"strings"
 	"testing"
 
-	"google.golang.org/api/option"
 	"google.golang.org/api/sheets/v4"
-
-	"github.com/steipete/gogcli/internal/ui"
 )
 
-func TestSheetsUpdateCopyValidationFrom(t *testing.T) {
-	origNew := newSheetsService
-	t.Cleanup(func() { newSheetsService = origNew })
+func newSheetsUpdateValidationTestContext(t *testing.T, handler http.Handler) context.Context {
+	t.Helper()
+	srv := httptest.NewServer(handler)
+	t.Cleanup(srv.Close)
+	svc := newSheetsServiceFromServer(t, srv)
+	return withSheetsTestService(newCmdRuntimeOutputContext(t, io.Discard, io.Discard), svc)
+}
 
+func TestSheetsUpdateCopyValidationFrom(t *testing.T) {
 	var gotCopyPaste *sheets.CopyPasteRequest
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := strings.TrimPrefix(r.URL.Path, "/sheets/v4")
 		path = strings.TrimPrefix(path, "/v4")
 		switch {
@@ -57,25 +59,10 @@ func TestSheetsUpdateCopyValidationFrom(t *testing.T) {
 			http.NotFound(w, r)
 			return
 		}
-	}))
-	defer srv.Close()
-
-	svc, err := sheets.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
-	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
-	newSheetsService = func(context.Context, string) (*sheets.Service, error) { return svc, nil }
+	})
 
 	flags := &RootFlags{Account: "a@b.com"}
-	u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
-	if uiErr != nil {
-		t.Fatalf("ui.New: %v", uiErr)
-	}
-	ctx := ui.WithUI(context.Background(), u)
+	ctx := newSheetsUpdateValidationTestContext(t, handler)
 	cmd := &SheetsUpdateCmd{}
 	if err := runKong(t, cmd, []string{
 		"s1",
@@ -115,12 +102,9 @@ func TestSheetsUpdateCopyValidationFrom(t *testing.T) {
 }
 
 func TestSheetsUpdateCopyValidationFromNamedRange(t *testing.T) {
-	origNew := newSheetsService
-	t.Cleanup(func() { newSheetsService = origNew })
-
 	var gotCopyPaste *sheets.CopyPasteRequest
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := strings.TrimPrefix(r.URL.Path, "/sheets/v4")
 		path = strings.TrimPrefix(path, "/v4")
 		switch {
@@ -169,25 +153,10 @@ func TestSheetsUpdateCopyValidationFromNamedRange(t *testing.T) {
 			http.NotFound(w, r)
 			return
 		}
-	}))
-	defer srv.Close()
-
-	svc, err := sheets.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
-	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
-	newSheetsService = func(context.Context, string) (*sheets.Service, error) { return svc, nil }
+	})
 
 	flags := &RootFlags{Account: "a@b.com"}
-	u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
-	if uiErr != nil {
-		t.Fatalf("ui.New: %v", uiErr)
-	}
-	ctx := ui.WithUI(context.Background(), u)
+	ctx := newSheetsUpdateValidationTestContext(t, handler)
 	cmd := &SheetsUpdateCmd{}
 	if err := runKong(t, cmd, []string{
 		"s1",

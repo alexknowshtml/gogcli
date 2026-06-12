@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -10,11 +11,9 @@ import (
 	"strings"
 	"testing"
 
-	"google.golang.org/api/option"
 	"google.golang.org/api/sheets/v4"
 
 	"github.com/steipete/gogcli/internal/outfmt"
-	"github.com/steipete/gogcli/internal/ui"
 )
 
 func TestBuildDataValidationCondition(t *testing.T) {
@@ -71,23 +70,22 @@ func TestBuildDataValidationCondition(t *testing.T) {
 }
 
 func TestSheetsValidationSetAndClear(t *testing.T) {
-	ctx, flags, requests, rawRequests, cleanup := newSheetsValidationTestContext(t, false)
+	ctx, flags, requests, rawRequests, output, cleanup := newSheetsValidationTestContext(t, false)
 	defer cleanup()
 
-	setOut := captureStdout(t, func() {
-		if err := runKong(t, &SheetsValidationSetCmd{}, []string{
-			"s1", "AllowedColors",
-			"--type", "ONE_OF_LIST",
-			"--value", "red",
-			"--value", "green",
-			"--strict",
-			"--no-show-custom-ui",
-			"--input-message", "Pick a color",
-			"--filtered-rows-included",
-		}, ctx, flags); err != nil {
-			t.Fatalf("validation set: %v", err)
-		}
-	})
+	if err := runKong(t, &SheetsValidationSetCmd{}, []string{
+		"s1", "AllowedColors",
+		"--type", "ONE_OF_LIST",
+		"--value", "red",
+		"--value", "green",
+		"--strict",
+		"--no-show-custom-ui",
+		"--input-message", "Pick a color",
+		"--filtered-rows-included",
+	}, ctx, flags); err != nil {
+		t.Fatalf("validation set: %v", err)
+	}
+	setOut := output.String()
 	if !strings.Contains(setOut, `"type": "ONE_OF_LIST"`) || !strings.Contains(setOut, `"showCustomUi": false`) {
 		t.Fatalf("unexpected set output: %s", setOut)
 	}
@@ -111,13 +109,13 @@ func TestSheetsValidationSetAndClear(t *testing.T) {
 		t.Fatalf("missing force-sent values: %s", (*rawRequests)[0])
 	}
 
-	clearOut := captureStdout(t, func() {
-		if err := runKong(t, &SheetsValidationClearCmd{}, []string{
-			"s1", "Sheet1!B2:B5",
-		}, ctx, flags); err != nil {
-			t.Fatalf("validation clear: %v", err)
-		}
-	})
+	output.Reset()
+	if err := runKong(t, &SheetsValidationClearCmd{}, []string{
+		"s1", "Sheet1!B2:B5",
+	}, ctx, flags); err != nil {
+		t.Fatalf("validation clear: %v", err)
+	}
+	clearOut := output.String()
 	if !strings.Contains(clearOut, `"cleared": true`) {
 		t.Fatalf("unexpected clear output: %s", clearOut)
 	}
@@ -137,34 +135,33 @@ func TestSheetsValidationSetAndClear(t *testing.T) {
 }
 
 func TestSheetsValidationGetJSONAndPlain(t *testing.T) {
-	ctx, flags, _, _, cleanup := newSheetsValidationTestContext(t, true)
+	ctx, flags, _, _, output, cleanup := newSheetsValidationTestContext(t, true)
 	defer cleanup()
 
-	jsonOut := captureStdout(t, func() {
-		if err := runKong(t, &SheetsValidationGetCmd{}, []string{"s1", "Sheet1!C2:C3"}, ctx, flags); err != nil {
-			t.Fatalf("validation get JSON: %v", err)
-		}
-	})
+	if err := runKong(t, &SheetsValidationGetCmd{}, []string{"s1", "Sheet1!C2:C3"}, ctx, flags); err != nil {
+		t.Fatalf("validation get JSON: %v", err)
+	}
+	jsonOut := output.String()
 	if !strings.Contains(jsonOut, `"a1": "Sheet1!C2"`) ||
 		!strings.Contains(jsonOut, `"type": "ONE_OF_LIST"`) ||
 		!strings.Contains(jsonOut, `"userEnteredValue": "red"`) {
 		t.Fatalf("unexpected JSON output: %s", jsonOut)
 	}
-	unqualifiedOut := captureStdout(t, func() {
-		if err := runKong(t, &SheetsValidationGetCmd{}, []string{"s1", "C2:C3"}, ctx, flags); err != nil {
-			t.Fatalf("validation get unqualified: %v", err)
-		}
-	})
+	output.Reset()
+	if err := runKong(t, &SheetsValidationGetCmd{}, []string{"s1", "C2:C3"}, ctx, flags); err != nil {
+		t.Fatalf("validation get unqualified: %v", err)
+	}
+	unqualifiedOut := output.String()
 	if !strings.Contains(unqualifiedOut, `"a1": "Sheet1!C2"`) {
 		t.Fatalf("unexpected unqualified output: %s", unqualifiedOut)
 	}
 
 	plainCtx := outfmt.WithMode(ctx, outfmt.Mode{Plain: true})
-	plainOut := captureStdout(t, func() {
-		if err := runKong(t, &SheetsValidationGetCmd{}, []string{"s1", "Sheet1!C2:C3"}, plainCtx, flags); err != nil {
-			t.Fatalf("validation get plain: %v", err)
-		}
-	})
+	output.Reset()
+	if err := runKong(t, &SheetsValidationGetCmd{}, []string{"s1", "Sheet1!C2:C3"}, plainCtx, flags); err != nil {
+		t.Fatalf("validation get plain: %v", err)
+	}
+	plainOut := output.String()
 	want := fmt.Sprintf(
 		"A1\tTYPE\tVALUES\tSTRICT\tSHOW_CUSTOM_UI\tINPUT_MESSAGE\n"+
 			"Sheet1!C2\tONE_OF_LIST\t[\"red\",\"green\"]\t%t\t%t\tPick one\n",
@@ -470,14 +467,7 @@ func TestFetchTableValidationSpansExcludesFooter(t *testing.T) {
 		})
 	}))
 	defer srv.Close()
-	svc, err := sheets.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
-	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
+	svc := newSheetsServiceFromServer(t, srv)
 	spans, err := fetchTableValidationSpans(context.Background(), svc, "s1")
 	if err != nil {
 		t.Fatalf("fetch spans: %v", err)
@@ -1085,14 +1075,7 @@ func TestResolveTableValidationCopyOptionsUsesEffectiveDestination(t *testing.T)
 	}))
 	defer srv.Close()
 
-	svc, err := sheets.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
-	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
+	svc := newSheetsServiceFromServer(t, srv)
 	opts, err := resolveTableValidationCopyOptions(
 		context.Background(),
 		svc,
@@ -1147,9 +1130,6 @@ func TestPasteCarriesDataValidation(t *testing.T) {
 }
 
 func TestSheetsCopyPasteTableValidationSupplement(t *testing.T) {
-	origNew := newSheetsService
-	t.Cleanup(func() { newSheetsService = origNew })
-
 	var got sheets.BatchUpdateSpreadsheetRequest
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := strings.TrimPrefix(strings.TrimPrefix(r.URL.Path, "/sheets/v4"), "/v4")
@@ -1202,22 +1182,10 @@ func TestSheetsCopyPasteTableValidationSupplement(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	svc, err := sheets.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
-	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
-	newSheetsService = func(context.Context, string) (*sheets.Service, error) { return svc, nil }
-	u, err := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
-	if err != nil {
-		t.Fatalf("ui.New: %v", err)
-	}
-	ctx := ui.WithUI(context.Background(), u)
+	svc := newSheetsServiceFromServer(t, srv)
+	ctx := withSheetsTestService(newCmdRuntimeOutputContext(t, io.Discard, io.Discard), svc)
 
-	err = runKong(t, &SheetsValidationSetCmd{}, []string{
+	err := runKong(t, &SheetsValidationSetCmd{}, []string{
 		"s1", "Sheet1!I2:I4",
 		"--type", "ONE_OF_LIST",
 		"--value", "blue",
@@ -1291,10 +1259,9 @@ func TestSheetsCopyPasteTableValidationSupplement(t *testing.T) {
 func newSheetsValidationTestContext(
 	t *testing.T,
 	includeGridData bool,
-) (context.Context, *RootFlags, *[]sheets.BatchUpdateSpreadsheetRequest, *[]string, func()) {
+) (context.Context, *RootFlags, *[]sheets.BatchUpdateSpreadsheetRequest, *[]string, *bytes.Buffer, func()) {
 	t.Helper()
 
-	origNew := newSheetsService
 	requests := []sheets.BatchUpdateSpreadsheetRequest{}
 	rawRequests := []string{}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1363,25 +1330,9 @@ func newSheetsValidationTestContext(
 		}
 	}))
 
-	svc, err := sheets.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
-	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
-	newSheetsService = func(context.Context, string) (*sheets.Service, error) { return svc, nil }
-
-	u, err := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
-	if err != nil {
-		t.Fatalf("ui.New: %v", err)
-	}
-	ctx := outfmt.WithMode(ui.WithUI(context.Background(), u), outfmt.Mode{JSON: true})
+	svc := newSheetsServiceFromServer(t, srv)
+	output := &bytes.Buffer{}
+	ctx := withSheetsTestService(newCmdRuntimeJSONOutputContext(t, output, io.Discard), svc)
 	flags := &RootFlags{Account: "a@b.com"}
-	cleanup := func() {
-		newSheetsService = origNew
-		srv.Close()
-	}
-	return ctx, flags, &requests, &rawRequests, cleanup
+	return ctx, flags, &requests, &rawRequests, output, srv.Close
 }

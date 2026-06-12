@@ -1,27 +1,17 @@
 package cmd
 
 import (
-	"context"
+	"bytes"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
-
-	"google.golang.org/api/option"
-	"google.golang.org/api/sheets/v4"
-
-	"github.com/steipete/gogcli/internal/outfmt"
-	"github.com/steipete/gogcli/internal/ui"
 )
 
 func TestSheetsGet_ValidationAndNoData(t *testing.T) {
-	u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
-	if uiErr != nil {
-		t.Fatalf("ui.New: %v", uiErr)
-	}
-	ctx := ui.WithUI(context.Background(), u)
+	ctx := newCmdRuntimeOutputContext(t, io.Discard, io.Discard)
 	flags := &RootFlags{Account: "a@b.com"}
 
 	if err := (&SheetsGetCmd{}).Run(ctx, flags); err == nil {
@@ -30,9 +20,6 @@ func TestSheetsGet_ValidationAndNoData(t *testing.T) {
 	if err := (&SheetsGetCmd{SpreadsheetID: "s1"}).Run(ctx, flags); err == nil {
 		t.Fatalf("expected missing range error")
 	}
-
-	origNew := newSheetsService
-	t.Cleanup(func() { newSheetsService = origNew })
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := strings.TrimPrefix(r.URL.Path, "/sheets/v4")
@@ -49,15 +36,8 @@ func TestSheetsGet_ValidationAndNoData(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	svc, err := sheets.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
-	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
-	newSheetsService = func(context.Context, string) (*sheets.Service, error) { return svc, nil }
+	svc := newSheetsServiceFromServer(t, srv)
+	ctx = withSheetsTestService(ctx, svc)
 
 	cmd := &SheetsGetCmd{SpreadsheetID: "s1", Range: "Sheet1!A1:B2", MajorDimension: "ROWS", ValueRenderOption: "FORMATTED_VALUE"}
 	if err := cmd.Run(ctx, flags); err != nil {
@@ -66,15 +46,9 @@ func TestSheetsGet_ValidationAndNoData(t *testing.T) {
 }
 
 func TestSheetsGet_JSONEmptyValuesArray(t *testing.T) {
-	u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
-	if uiErr != nil {
-		t.Fatalf("ui.New: %v", uiErr)
-	}
-	ctx := outfmt.WithMode(ui.WithUI(context.Background(), u), outfmt.Mode{JSON: true})
+	output := &bytes.Buffer{}
+	ctx := newCmdRuntimeJSONOutputContext(t, output, io.Discard)
 	flags := &RootFlags{Account: "a@b.com", JSON: true}
-
-	origNew := newSheetsService
-	t.Cleanup(func() { newSheetsService = origNew })
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := strings.TrimPrefix(r.URL.Path, "/sheets/v4")
@@ -88,22 +62,14 @@ func TestSheetsGet_JSONEmptyValuesArray(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	svc, err := sheets.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
-	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
-	newSheetsService = func(context.Context, string) (*sheets.Service, error) { return svc, nil }
+	svc := newSheetsServiceFromServer(t, srv)
+	ctx = withSheetsTestService(ctx, svc)
 
 	cmd := &SheetsGetCmd{SpreadsheetID: "s1", Range: "Sheet1!Z999"}
-	out := captureStdout(t, func() {
-		if err := cmd.Run(ctx, flags); err != nil {
-			t.Fatalf("get: %v", err)
-		}
-	})
+	if err := cmd.Run(ctx, flags); err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	out := output.String()
 
 	var parsed struct {
 		Range  string            `json:"range"`
@@ -124,11 +90,7 @@ func TestSheetsGet_JSONEmptyValuesArray(t *testing.T) {
 }
 
 func TestSheetsUpdateAppend_ValidationErrors(t *testing.T) {
-	u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
-	if uiErr != nil {
-		t.Fatalf("ui.New: %v", uiErr)
-	}
-	ctx := ui.WithUI(context.Background(), u)
+	ctx := newCmdRuntimeOutputContext(t, io.Discard, io.Discard)
 	flags := &RootFlags{Account: "a@b.com"}
 	requireUsage := func(t *testing.T, name string, err error) {
 		t.Helper()
@@ -152,9 +114,6 @@ func TestSheetsUpdateAppend_ValidationErrors(t *testing.T) {
 }
 
 func TestSheetsUpdateCopyValidationMissingRange(t *testing.T) {
-	origNew := newSheetsService
-	t.Cleanup(func() { newSheetsService = origNew })
-
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := strings.TrimPrefix(r.URL.Path, "/sheets/v4")
 		path = strings.TrimPrefix(path, "/v4")
@@ -170,21 +129,8 @@ func TestSheetsUpdateCopyValidationMissingRange(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	svc, err := sheets.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
-	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
-	newSheetsService = func(context.Context, string) (*sheets.Service, error) { return svc, nil }
-
-	u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
-	if uiErr != nil {
-		t.Fatalf("ui.New: %v", uiErr)
-	}
-	ctx := ui.WithUI(context.Background(), u)
+	svc := newSheetsServiceFromServer(t, srv)
+	ctx := withSheetsTestService(newCmdRuntimeOutputContext(t, io.Discard, io.Discard), svc)
 	flags := &RootFlags{Account: "a@b.com"}
 
 	cmd := &SheetsUpdateCmd{ValueInput: ""}
@@ -194,9 +140,6 @@ func TestSheetsUpdateCopyValidationMissingRange(t *testing.T) {
 }
 
 func TestSheetsAppendCopyValidationMissingRange(t *testing.T) {
-	origNew := newSheetsService
-	t.Cleanup(func() { newSheetsService = origNew })
-
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := strings.TrimPrefix(r.URL.Path, "/sheets/v4")
 		path = strings.TrimPrefix(path, "/v4")
@@ -209,21 +152,8 @@ func TestSheetsAppendCopyValidationMissingRange(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	svc, err := sheets.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
-	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
-	newSheetsService = func(context.Context, string) (*sheets.Service, error) { return svc, nil }
-
-	u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
-	if uiErr != nil {
-		t.Fatalf("ui.New: %v", uiErr)
-	}
-	ctx := ui.WithUI(context.Background(), u)
+	svc := newSheetsServiceFromServer(t, srv)
+	ctx := withSheetsTestService(newCmdRuntimeOutputContext(t, io.Discard, io.Discard), svc)
 	flags := &RootFlags{Account: "a@b.com"}
 
 	cmd := &SheetsAppendCmd{Insert: "INSERT_ROWS", ValueInput: ""}
@@ -233,11 +163,7 @@ func TestSheetsAppendCopyValidationMissingRange(t *testing.T) {
 }
 
 func TestSheetsClearMetadataCreate_ValidationErrors(t *testing.T) {
-	u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
-	if uiErr != nil {
-		t.Fatalf("ui.New: %v", uiErr)
-	}
-	ctx := ui.WithUI(context.Background(), u)
+	ctx := newCmdRuntimeOutputContext(t, io.Discard, io.Discard)
 	flags := &RootFlags{Account: "a@b.com"}
 
 	if err := (&SheetsClearCmd{}).Run(ctx, flags); err == nil {
@@ -261,11 +187,7 @@ func TestSheetsClearMetadataCreate_ValidationErrors(t *testing.T) {
 }
 
 func TestSheetsFormat_ValidationErrors(t *testing.T) {
-	u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
-	if uiErr != nil {
-		t.Fatalf("ui.New: %v", uiErr)
-	}
-	ctx := ui.WithUI(context.Background(), u)
+	ctx := newCmdRuntimeOutputContext(t, io.Discard, io.Discard)
 	flags := &RootFlags{Account: "a@b.com"}
 
 	if err := (&SheetsFormatCmd{}).Run(ctx, flags); err == nil {
@@ -303,11 +225,7 @@ func TestSheetsFormat_ValidationErrors(t *testing.T) {
 }
 
 func TestSheetsQualifiedRangeValidationErrors(t *testing.T) {
-	u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
-	if uiErr != nil {
-		t.Fatalf("ui.New: %v", uiErr)
-	}
-	ctx := ui.WithUI(context.Background(), u)
+	ctx := newCmdRuntimeOutputContext(t, io.Discard, io.Discard)
 	flags := &RootFlags{Account: "a@b.com", DryRun: true}
 	note := "test"
 
