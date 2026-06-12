@@ -54,7 +54,7 @@ func (c *FormsGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return usage("empty formId")
 	}
 
-	svc, err := newFormsService(ctx, account)
+	svc, err := formsService(ctx, account)
 	if err != nil {
 		return err
 	}
@@ -100,7 +100,7 @@ func (c *FormsCreateCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return err
 	}
 
-	svc, err := newFormsService(ctx, account)
+	svc, err := formsService(ctx, account)
 	if err != nil {
 		return err
 	}
@@ -175,7 +175,7 @@ func (c *FormsResponsesListCmd) Run(ctx context.Context, flags *RootFlags) error
 		return usage("--max must be > 0")
 	}
 
-	svc, err := newFormsService(ctx, account)
+	svc, err := formsService(ctx, account)
 	if err != nil {
 		return err
 	}
@@ -238,7 +238,7 @@ func (c *FormsResponseGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return usage("empty responseId")
 	}
 
-	svc, err := newFormsService(ctx, account)
+	svc, err := formsService(ctx, account)
 	if err != nil {
 		return err
 	}

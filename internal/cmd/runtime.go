@@ -11,6 +11,7 @@ import (
 	"google.golang.org/api/cloudidentity/v1"
 	"google.golang.org/api/docs/v1"
 	"google.golang.org/api/drive/v3"
+	formsapi "google.golang.org/api/forms/v1"
 	"google.golang.org/api/gmail/v1"
 	"google.golang.org/api/people/v1"
 	"google.golang.org/api/sheets/v4"
@@ -38,6 +39,7 @@ func newDefaultRuntime() *app.Runtime {
 				return googleapi.NewHTTPClient(ctx, googleauth.ServiceDocs, account)
 			},
 			Drive:           googleapi.NewDrive,
+			Forms:           newFormsService,
 			Gmail:           googleapi.NewGmail,
 			PeopleContacts:  googleapi.NewPeopleContacts,
 			PeopleDirectory: googleapi.NewPeopleDirectory,
@@ -84,6 +86,9 @@ func normalizedRuntime(runtime *app.Runtime) *app.Runtime {
 	}
 	if normalized.Services.DocsHTTP == nil {
 		normalized.Services.DocsHTTP = defaults.Services.DocsHTTP
+	}
+	if normalized.Services.Forms == nil {
+		normalized.Services.Forms = defaults.Services.Forms
 	}
 	if normalized.Services.Gmail == nil {
 		normalized.Services.Gmail = defaults.Services.Gmail
@@ -182,6 +187,13 @@ func docsHTTPClient(ctx context.Context, account string) (*http.Client, error) {
 		return runtime.Services.DocsHTTP(ctx, account)
 	}
 	return googleapi.NewHTTPClient(ctx, googleauth.ServiceDocs, account)
+}
+
+func formsService(ctx context.Context, account string) (*formsapi.Service, error) {
+	if runtime, ok := app.FromContext(ctx); ok && runtime.Services.Forms != nil {
+		return runtime.Services.Forms(ctx, account)
+	}
+	return newFormsService(ctx, account)
 }
 
 func gmailService(ctx context.Context, account string) (*gmail.Service, error) {

@@ -10,6 +10,7 @@ import (
 	"google.golang.org/api/cloudidentity/v1"
 	"google.golang.org/api/docs/v1"
 	"google.golang.org/api/drive/v3"
+	"google.golang.org/api/forms/v1"
 	"google.golang.org/api/gmail/v1"
 	"google.golang.org/api/people/v1"
 	"google.golang.org/api/sheets/v4"
@@ -32,6 +33,7 @@ type (
 	DocsServiceFactory          func(context.Context, string) (*docs.Service, error)
 	DocsHTTPClientFactory       func(context.Context, string) (*http.Client, error)
 	DriveServiceFactory         func(context.Context, string) (*drive.Service, error)
+	FormsServiceFactory         func(context.Context, string) (*forms.Service, error)
 	GmailServiceFactory         func(context.Context, string) (*gmail.Service, error)
 	PeopleServiceFactory        func(context.Context, string) (*people.Service, error)
 	SheetsServiceFactory        func(context.Context, string) (*sheets.Service, error)
@@ -54,6 +56,7 @@ type Services struct {
 	Docs            DocsServiceFactory
 	DocsHTTP        DocsHTTPClientFactory
 	Drive           DriveServiceFactory
+	Forms           FormsServiceFactory
 	Gmail           GmailServiceFactory
 	PeopleContacts  PeopleServiceFactory
 	PeopleDirectory PeopleServiceFactory

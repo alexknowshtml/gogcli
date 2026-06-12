@@ -147,7 +147,7 @@ func buildAppScriptBackupSnapshot(ctx context.Context, flags *RootFlags, shardMa
 }
 
 func fetchFormsBackupRows(ctx context.Context, account string, driveSvc *drive.Service) ([]formsBackupForm, int, error) {
-	formsSvc, err := newFormsService(ctx, account)
+	formsSvc, err := formsService(ctx, account)
 	if err != nil {
 		return nil, 0, err
 	}

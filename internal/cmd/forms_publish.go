@@ -63,7 +63,7 @@ func setFormPublishState(ctx context.Context, flags *RootFlags, publishReq formP
 		return err
 	}
 
-	svc, err := newFormsService(ctx, account)
+	svc, err := formsService(ctx, account)
 	if err != nil {
 		return err
 	}

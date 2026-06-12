@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"google.golang.org/api/drive/v3"
+	formsapi "google.golang.org/api/forms/v1"
 	"google.golang.org/api/gmail/v1"
 	"google.golang.org/api/people/v1"
 	"google.golang.org/api/sheets/v4"
@@ -83,6 +84,31 @@ func TestDriveServiceUsesRuntimeFactory(t *testing.T) {
 	}
 	if got != want {
 		t.Fatalf("driveService() = %p, want %p", got, want)
+	}
+	if gotAccount != "test@example.com" {
+		t.Fatalf("factory account = %q, want test@example.com", gotAccount)
+	}
+}
+
+func TestFormsServiceUsesRuntimeFactory(t *testing.T) {
+	t.Parallel()
+
+	want := &formsapi.Service{}
+	var gotAccount string
+	runtime := &app.Runtime{Services: app.Services{
+		Forms: func(_ context.Context, account string) (*formsapi.Service, error) {
+			gotAccount = account
+			return want, nil
+		},
+	}}
+	ctx := app.WithRuntime(context.Background(), runtime)
+
+	got, err := formsService(ctx, "test@example.com")
+	if err != nil {
+		t.Fatalf("formsService() error = %v", err)
+	}
+	if got != want {
+		t.Fatalf("formsService() = %p, want %p", got, want)
 	}
 	if gotAccount != "test@example.com" {
 		t.Fatalf("factory account = %q, want test@example.com", gotAccount)
