@@ -202,7 +202,7 @@ func fetchWorkspaceNativeRows(ctx context.Context, flags *RootFlags, driveSvc *d
 	var sheetsSvc *sheets.Service
 	var slidesSvc *slides.Service
 	if opts.Native {
-		docsSvc, _ = newDocsService(ctx, account)
+		docsSvc, _ = docsService(ctx, account)
 		sheetsSvc, _ = sheetsService(ctx, account)
 		slidesSvc, _ = slidesService(ctx, account)
 	}

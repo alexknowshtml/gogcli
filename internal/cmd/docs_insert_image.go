@@ -97,7 +97,7 @@ func (c *DocsInsertImageCmd) Run(ctx context.Context, flags *RootFlags) error {
 	if err != nil {
 		return err
 	}
-	docsSvc, err := newDocsService(ctx, account)
+	docsSvc, err := docsService(ctx, account)
 	if err != nil {
 		return err
 	}

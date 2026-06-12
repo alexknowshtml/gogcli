@@ -310,7 +310,7 @@ func (c *DocsCreateCmd) Run(ctx context.Context, flags *RootFlags) error {
 		}
 	}
 	if c.Pageless {
-		docsSvc, svcErr := newDocsService(ctx, account)
+		docsSvc, svcErr := docsService(ctx, account)
 		if svcErr != nil {
 			return svcErr
 		}
@@ -335,7 +335,7 @@ func (c *DocsCreateCmd) Run(ctx context.Context, flags *RootFlags) error {
 // insertImages performs pass 2: reads back the created doc, resolves image URLs,
 // and replaces placeholder text with inline images.
 func (c *DocsCreateCmd) insertImages(ctx context.Context, account string, docID string, images []markdownImage) error {
-	svc, err := newDocsService(ctx, account)
+	svc, err := docsService(ctx, account)
 	if err != nil {
 		return err
 	}

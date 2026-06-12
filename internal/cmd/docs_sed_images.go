@@ -13,7 +13,7 @@ import (
 )
 
 func (c *DocsSedCmd) runImageReplace(ctx context.Context, u *ui.UI, account, docID string, ref *ImageRefPattern, replacement string, global bool) error {
-	docsSvc, err := newDocsService(ctx, account)
+	docsSvc, err := docsService(ctx, account)
 	if err != nil {
 		return fmt.Errorf("create docs service: %w", err)
 	}

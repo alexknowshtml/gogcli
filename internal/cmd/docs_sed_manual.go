@@ -12,7 +12,7 @@ import (
 )
 
 func (c *DocsSedCmd) runManual(ctx context.Context, u *ui.UI, account, id string, expr sedExpr) error {
-	docsSvc, err := newDocsService(ctx, account)
+	docsSvc, err := docsService(ctx, account)
 	if err != nil {
 		return fmt.Errorf("create docs service: %w", err)
 	}

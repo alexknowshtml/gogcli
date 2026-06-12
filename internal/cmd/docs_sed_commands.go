@@ -13,7 +13,7 @@ import (
 // fetchDoc creates a Docs service and fetches the document. Used by command implementations
 // that need the full document structure (delete, append, insert).
 func fetchDoc(ctx context.Context, account, id string) (*docs.Service, *docs.Document, error) {
-	docsSvc, err := newDocsService(ctx, account)
+	docsSvc, err := docsService(ctx, account)
 	if err != nil {
 		return nil, nil, fmt.Errorf("create docs service: %w", err)
 	}
@@ -254,7 +254,7 @@ func resolveAddress(addr *sedAddress, pm *paragraphMap) ([]docParagraph, error) 
 
 // runAddressedDelete deletes paragraphs by address (number or range).
 func (c *DocsSedCmd) runAddressedDelete(ctx context.Context, u *ui.UI, account, id, tabID string, expr sedExpr) error {
-	docsSvc, err := newDocsService(ctx, account)
+	docsSvc, err := docsService(ctx, account)
 	if err != nil {
 		return err
 	}
@@ -314,7 +314,7 @@ func (c *DocsSedCmd) runAddressedDelete(ctx context.Context, u *ui.UI, account, 
 
 // runAddressedAppend inserts text after the addressed paragraph(s).
 func (c *DocsSedCmd) runAddressedAppend(ctx context.Context, u *ui.UI, account, id, tabID string, expr sedExpr) error {
-	docsSvc, err := newDocsService(ctx, account)
+	docsSvc, err := docsService(ctx, account)
 	if err != nil {
 		return err
 	}
@@ -359,7 +359,7 @@ func (c *DocsSedCmd) runAddressedAppend(ctx context.Context, u *ui.UI, account, 
 
 // runAddressedInsert inserts text before the addressed paragraph(s).
 func (c *DocsSedCmd) runAddressedInsert(ctx context.Context, u *ui.UI, account, id, tabID string, expr sedExpr) error {
-	docsSvc, err := newDocsService(ctx, account)
+	docsSvc, err := docsService(ctx, account)
 	if err != nil {
 		return err
 	}
@@ -400,7 +400,7 @@ func (c *DocsSedCmd) runAddressedInsert(ctx context.Context, u *ui.UI, account, 
 
 // runAddressedSubstitute applies a substitution only within the addressed paragraph(s).
 func (c *DocsSedCmd) runAddressedSubstitute(ctx context.Context, u *ui.UI, account, id, tabID string, expr sedExpr) error {
-	docsSvc, err := newDocsService(ctx, account)
+	docsSvc, err := docsService(ctx, account)
 	if err != nil {
 		return err
 	}

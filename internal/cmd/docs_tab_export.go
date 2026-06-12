@@ -194,7 +194,7 @@ func runDocsTabExport(ctx context.Context, flags *RootFlags, p tabExportParams) 
 		return err
 	}
 
-	docsSvc, err := newDocsService(ctx, account)
+	docsSvc, err := docsService(ctx, account)
 	if err != nil {
 		return err
 	}

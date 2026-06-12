@@ -311,7 +311,7 @@ func (c *DocsWriteCmd) writeMarkdown(ctx context.Context, flags *RootFlags, docI
 
 	var docsSvc *docs.Service
 	if c.CheckOrphans {
-		docsSvc, err = newDocsService(ctx, account)
+		docsSvc, err = docsService(ctx, account)
 		if err != nil {
 			return err
 		}
@@ -337,7 +337,7 @@ func (c *DocsWriteCmd) writeMarkdown(ctx context.Context, flags *RootFlags, docI
 	needsDocsSvc := len(images) > 0 || c.Pageless || c.Layout.any() || markdownMayContainHeadingLinks(cleaned)
 	if needsDocsSvc && docsSvc == nil {
 		var svcErr error
-		docsSvc, svcErr = newDocsService(ctx, account)
+		docsSvc, svcErr = docsService(ctx, account)
 		if svcErr != nil {
 			return svcErr
 		}
@@ -519,7 +519,7 @@ func (c *DocsWriteCmd) replaceMarkdownInTab(ctx context.Context, flags *RootFlag
 		if driveErr != nil {
 			return driveErr
 		}
-		svc, err = newDocsService(ctx, account)
+		svc, err = docsService(ctx, account)
 		if err != nil {
 			return err
 		}

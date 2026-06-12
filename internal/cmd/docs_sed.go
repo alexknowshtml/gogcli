@@ -157,7 +157,7 @@ func (c *DocsSedCmd) runPositionalInsert(ctx context.Context, u *ui.UI, account,
 		return false, nil
 	}
 
-	docsSvc, err := newDocsService(ctx, account)
+	docsSvc, err := docsService(ctx, account)
 	if err != nil {
 		return true, fmt.Errorf("create docs service: %w", err)
 	}
@@ -379,7 +379,7 @@ func (c *DocsSedCmd) runBatch(ctx context.Context, u *ui.UI, account, id string,
 		}
 	}
 
-	docsSvc, err := newDocsService(ctx, account)
+	docsSvc, err := docsService(ctx, account)
 	if err != nil {
 		return fmt.Errorf("create docs service: %w", err)
 	}
@@ -645,7 +645,7 @@ func (c *DocsSedCmd) processCellExprs(ctx context.Context, u *ui.UI, account, id
 }
 
 func (c *DocsSedCmd) runNative(ctx context.Context, u *ui.UI, account, docID, pattern, replacement string) error {
-	docsSvc, err := newDocsService(ctx, account)
+	docsSvc, err := docsService(ctx, account)
 	if err != nil {
 		return fmt.Errorf("create docs service: %w", err)
 	}

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 
+	"google.golang.org/api/docs/v1"
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/gmail/v1"
 	"google.golang.org/api/people/v1"
@@ -24,6 +25,7 @@ func newDefaultRuntime() *app.Runtime {
 			Err: os.Stderr,
 		},
 		Services: app.Services{
+			Docs:           newDocsService,
 			Drive:          googleapi.NewDrive,
 			Gmail:          googleapi.NewGmail,
 			PeopleContacts: newPeopleContactsService,
@@ -52,6 +54,9 @@ func normalizedRuntime(runtime *app.Runtime) *app.Runtime {
 	}
 	if normalized.Services.Drive == nil {
 		normalized.Services.Drive = defaults.Services.Drive
+	}
+	if normalized.Services.Docs == nil {
+		normalized.Services.Docs = defaults.Services.Docs
 	}
 	if normalized.Services.Gmail == nil {
 		normalized.Services.Gmail = defaults.Services.Gmail
@@ -99,6 +104,13 @@ func driveService(ctx context.Context, account string) (*drive.Service, error) {
 		return runtime.Services.Drive(ctx, account)
 	}
 	return googleapi.NewDrive(ctx, account)
+}
+
+func docsService(ctx context.Context, account string) (*docs.Service, error) {
+	if runtime, ok := app.FromContext(ctx); ok && runtime.Services.Docs != nil {
+		return runtime.Services.Docs(ctx, account)
+	}
+	return newDocsService(ctx, account)
 }
 
 func gmailService(ctx context.Context, account string) (*gmail.Service, error) {

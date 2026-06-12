@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 
+	"google.golang.org/api/docs/v1"
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/gmail/v1"
 	"google.golang.org/api/people/v1"
@@ -19,6 +20,7 @@ type IO struct {
 }
 
 type (
+	DocsServiceFactory   func(context.Context, string) (*docs.Service, error)
 	DriveServiceFactory  func(context.Context, string) (*drive.Service, error)
 	GmailServiceFactory  func(context.Context, string) (*gmail.Service, error)
 	PeopleServiceFactory func(context.Context, string) (*people.Service, error)
@@ -29,6 +31,7 @@ type (
 )
 
 type Services struct {
+	Docs           DocsServiceFactory
 	Drive          DriveServiceFactory
 	Gmail          GmailServiceFactory
 	PeopleContacts PeopleServiceFactory
