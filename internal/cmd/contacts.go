@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	"google.golang.org/api/people/v1"
@@ -78,7 +77,7 @@ func (c *ContactsSearchCmd) Run(ctx context.Context, flags *RootFlags) error {
 				Birthday: primaryBirthday(p),
 			})
 		}
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"contacts": items})
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{"contacts": items})
 	}
 	if len(resp.Results) == 0 {
 		u.Err().Println("No results")

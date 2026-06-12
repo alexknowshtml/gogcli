@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"errors"
-	"os"
 	"strings"
 	"time"
 
@@ -55,7 +54,7 @@ func (c *PeopleMeCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"person": person})
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{"person": person})
 	}
 
 	name := ""

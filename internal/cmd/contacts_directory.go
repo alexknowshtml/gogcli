@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -86,7 +85,7 @@ func (c *ContactsDirectoryListCmd) Run(ctx context.Context, flags *RootFlags) er
 				Email:    primaryEmail(p),
 			})
 		}
-		if err := outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		if err := outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{
 			"people":        items,
 			"nextPageToken": nextPageToken,
 		}); err != nil {
@@ -185,7 +184,7 @@ func (c *ContactsDirectorySearchCmd) Run(ctx context.Context, flags *RootFlags) 
 				Email:    primaryEmail(p),
 			})
 		}
-		if err := outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		if err := outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{
 			"people":        items,
 			"nextPageToken": nextPageToken,
 		}); err != nil {
@@ -287,7 +286,7 @@ func (c *ContactsOtherListCmd) Run(ctx context.Context, flags *RootFlags) error 
 				Phone:    primaryPhone(p),
 			})
 		}
-		if err := outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		if err := outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{
 			"contacts":      items,
 			"nextPageToken": nextPageToken,
 		}); err != nil {
@@ -372,7 +371,7 @@ func (c *ContactsOtherSearchCmd) Run(ctx context.Context, flags *RootFlags) erro
 				Phone:    primaryPhone(p),
 			})
 		}
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"contacts": items})
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{"contacts": items})
 	}
 
 	if len(resp.Results) == 0 {

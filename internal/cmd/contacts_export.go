@@ -59,7 +59,7 @@ func (c *ContactsExportCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return writeErr
 	}
 	if c.Out == "-" || strings.TrimSpace(c.Out) == "" {
-		_, err = os.Stdout.Write(buf.Bytes())
+		_, err = stdoutWriter(ctx).Write(buf.Bytes())
 		return err
 	}
 	if err := os.WriteFile(c.Out, buf.Bytes(), 0o600); err != nil {

@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 
@@ -261,7 +260,7 @@ func writeContactsDedupe(ctx context.Context, u *ui.UI, groups []contactsDedupeG
 			"scanned": scanned,
 			"groups":  contactsDedupeGroupsJSON(groups),
 		}
-		return outfmt.WriteJSON(ctx, os.Stdout, payload)
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), payload)
 	}
 	if len(groups) == 0 {
 		if u != nil {

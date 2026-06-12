@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	"google.golang.org/api/people/v1"
@@ -42,7 +41,7 @@ func (c *PeopleGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return wrapPeopleAPIError(err)
 	}
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"person": person})
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{"person": person})
 	}
 
 	name := primaryName(person)
@@ -134,7 +133,7 @@ func (c *PeopleSearchCmd) Run(ctx context.Context, flags *RootFlags) error {
 				Email:    primaryEmail(p),
 			})
 		}
-		if err := outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		if err := outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{
 			"people":        items,
 			"nextPageToken": nextPageToken,
 		}); err != nil {
@@ -224,7 +223,7 @@ func (c *PeopleRelationsCmd) Run(ctx context.Context, flags *RootFlags) error {
 		if relationType != "" {
 			resp["relationType"] = relationType
 		}
-		return outfmt.WriteJSON(ctx, os.Stdout, resp)
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), resp)
 	}
 
 	if len(relations) == 0 {
