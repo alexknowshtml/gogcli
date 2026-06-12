@@ -206,20 +206,16 @@ func TestGmailTrackSetup_DryRunDoesNotReadExistingKeyringSecrets(t *testing.T) {
 func TestGmailTrackJSONOutputs(t *testing.T) {
 	setupTrackingEnv(t)
 
-	var setupErr string
-	setupOut := captureStdout(t, func() {
-		setupErr = captureStderr(t, func() {
-			if err := Execute([]string{"--account", "a@b.com", "--no-input", "--json", "gmail", "track", "setup", "--worker-url", "https://example.com"}); err != nil {
-				t.Fatalf("setup: %v", err)
-			}
-		})
-	})
-	if strings.Contains(setupErr, "TRACKING_KEY=") || strings.Contains(setupErr, "ADMIN_KEY=") {
-		t.Fatalf("json setup should not print manual secrets to stderr: %q", setupErr)
+	setupResult := executeWithTestRuntime(t, []string{"--account", "a@b.com", "--no-input", "--json", "gmail", "track", "setup", "--worker-url", "https://example.com"}, nil)
+	if setupResult.err != nil {
+		t.Fatalf("setup: %v", setupResult.err)
+	}
+	if strings.Contains(setupResult.stderr, "TRACKING_KEY=") || strings.Contains(setupResult.stderr, "ADMIN_KEY=") {
+		t.Fatalf("json setup should not print manual secrets to stderr: %q", setupResult.stderr)
 	}
 	var setupPayload map[string]any
-	if err := json.Unmarshal([]byte(setupOut), &setupPayload); err != nil {
-		t.Fatalf("setup json: %v\n%s", err, setupOut)
+	if err := json.Unmarshal([]byte(setupResult.stdout), &setupPayload); err != nil {
+		t.Fatalf("setup json: %v\n%s", err, setupResult.stdout)
 	}
 	if setupPayload["configured"] != true || setupPayload["workerUrl"] != "https://example.com" {
 		t.Fatalf("unexpected setup json: %#v", setupPayload)
@@ -228,31 +224,25 @@ func TestGmailTrackJSONOutputs(t *testing.T) {
 		t.Fatalf("setup json should expose secret presence, not values: %#v", setupPayload)
 	}
 
-	statusOut := captureStdout(t, func() {
-		_ = captureStderr(t, func() {
-			if err := Execute([]string{"--account", "a@b.com", "--json", "gmail", "track", "status"}); err != nil {
-				t.Fatalf("status: %v", err)
-			}
-		})
-	})
+	statusResult := executeWithTestRuntime(t, []string{"--account", "a@b.com", "--json", "gmail", "track", "status"}, nil)
+	if statusResult.err != nil {
+		t.Fatalf("status: %v", statusResult.err)
+	}
 	var statusPayload map[string]any
-	if err := json.Unmarshal([]byte(statusOut), &statusPayload); err != nil {
-		t.Fatalf("status json: %v\n%s", err, statusOut)
+	if err := json.Unmarshal([]byte(statusResult.stdout), &statusPayload); err != nil {
+		t.Fatalf("status json: %v\n%s", err, statusResult.stdout)
 	}
 	if statusPayload["configured"] != true || statusPayload["trackingKeyVersion"].(float64) != 1 {
 		t.Fatalf("unexpected status json: %#v", statusPayload)
 	}
 
-	rotateOut := captureStdout(t, func() {
-		_ = captureStderr(t, func() {
-			if err := Execute([]string{"--account", "a@b.com", "--no-input", "--json", "gmail", "track", "key", "rotate", "--no-deploy"}); err != nil {
-				t.Fatalf("rotate: %v", err)
-			}
-		})
-	})
+	rotateResult := executeWithTestRuntime(t, []string{"--account", "a@b.com", "--no-input", "--json", "gmail", "track", "key", "rotate", "--no-deploy"}, nil)
+	if rotateResult.err != nil {
+		t.Fatalf("rotate: %v", rotateResult.err)
+	}
 	var rotatePayload map[string]any
-	if err := json.Unmarshal([]byte(rotateOut), &rotatePayload); err != nil {
-		t.Fatalf("rotate json: %v\n%s", err, rotateOut)
+	if err := json.Unmarshal([]byte(rotateResult.stdout), &rotatePayload); err != nil {
+		t.Fatalf("rotate json: %v\n%s", err, rotateResult.stdout)
 	}
 	if rotatePayload["trackingKeyRotated"] != true || rotatePayload["trackingKeyVersion"].(float64) != 2 {
 		t.Fatalf("unexpected rotate json: %#v", rotatePayload)
@@ -475,26 +465,20 @@ func TestGmailTrackOpens_JSON(t *testing.T) {
 		t.Fatalf("SaveConfig: %v", err)
 	}
 
-	trackOut := captureStdout(t, func() {
-		_ = captureStderr(t, func() {
-			if err := Execute([]string{"--json", "--account", "a@b.com", "gmail", "track", "opens", "tid"}); err != nil {
-				t.Fatalf("Execute: %v", err)
-			}
-		})
-	})
-	if !strings.Contains(trackOut, "\"tracking_id\"") {
-		t.Fatalf("unexpected track json output: %q", trackOut)
+	trackResult := executeWithTestRuntime(t, []string{"--json", "--account", "a@b.com", "gmail", "track", "opens", "tid"}, nil)
+	if trackResult.err != nil {
+		t.Fatalf("Execute: %v", trackResult.err)
+	}
+	if !strings.Contains(trackResult.stdout, "\"tracking_id\"") {
+		t.Fatalf("unexpected track json output: %q", trackResult.stdout)
 	}
 
-	adminOut := captureStdout(t, func() {
-		_ = captureStderr(t, func() {
-			if err := Execute([]string{"--json", "--account", "a@b.com", "gmail", "track", "opens", "--to", "user@example.com"}); err != nil {
-				t.Fatalf("Execute: %v", err)
-			}
-		})
-	})
-	if !strings.Contains(adminOut, "\"opens\"") {
-		t.Fatalf("unexpected admin json output: %q", adminOut)
+	adminResult := executeWithTestRuntime(t, []string{"--json", "--account", "a@b.com", "gmail", "track", "opens", "--to", "user@example.com"}, nil)
+	if adminResult.err != nil {
+		t.Fatalf("Execute: %v", adminResult.err)
+	}
+	if !strings.Contains(adminResult.stdout, "\"opens\"") {
+		t.Fatalf("unexpected admin json output: %q", adminResult.stdout)
 	}
 
 	if parsed, err := parseTrackingSince("24h"); err != nil || parsed == "" {

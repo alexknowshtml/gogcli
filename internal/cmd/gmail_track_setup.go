@@ -185,7 +185,7 @@ func (c *GmailTrackSetupCmd) Run(ctx context.Context, flags *RootFlags) error {
 
 	path, _ := tracking.ConfigPath()
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{
 			"account":              account,
 			"adminConfigured":      strings.TrimSpace(adminKey) != "",
 			"configPath":           path,

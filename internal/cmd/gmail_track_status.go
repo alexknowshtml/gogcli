@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"os"
 	"strings"
 
 	"github.com/steipete/gogcli/internal/outfmt"
@@ -34,7 +33,7 @@ func (c *GmailTrackStatusCmd) Run(ctx context.Context, flags *RootFlags) error {
 			payload["workerName"] = cfg.WorkerName
 			payload["workerUrl"] = cfg.WorkerURL
 		}
-		return outfmt.WriteJSON(ctx, os.Stdout, payload)
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), payload)
 	}
 
 	if path != "" {
