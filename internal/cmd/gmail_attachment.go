@@ -27,7 +27,7 @@ const defaultGmailAttachmentFilename = "attachment.bin"
 
 func printAttachmentDownloadResult(ctx context.Context, u *ui.UI, path string, cached bool, bytes int64) error {
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"path": path, "cached": cached, "bytes": bytes})
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{"path": path, "cached": cached, "bytes": bytes})
 	}
 	u.Out().Linef("path\t%s", path)
 	u.Out().Linef("cached\t%t", cached)
