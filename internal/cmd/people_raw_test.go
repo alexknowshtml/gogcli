@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -29,10 +30,10 @@ func newPeopleRawTestServer(t *testing.T, status int, body map[string]any) *http
 	}))
 }
 
-func installMockPeopleContactsService(t *testing.T, srv *httptest.Server) {
+func withMockPeopleContactsService(t *testing.T, ctx context.Context, srv *httptest.Server) context.Context {
 	t.Helper()
 	svc := newGoogleTestServiceWithEndpoint(t, srv.Client(), srv.URL+"/", people.NewService)
-	stubGoogleTestService(t, &newPeopleContactsService, svc)
+	return withPeopleContactsTestService(ctx, svc)
 }
 
 func fullPersonResponse() map[string]any {
@@ -51,9 +52,8 @@ func fullPersonResponse() map[string]any {
 func TestPeopleRaw_HappyPath(t *testing.T) {
 	srv := newPeopleRawTestServer(t, 0, fullPersonResponse())
 	defer srv.Close()
-	installMockPeopleContactsService(t, srv)
 
-	ctx := rawTestContext(t)
+	ctx := withMockPeopleContactsService(t, rawTestContext(t), srv)
 	flags := &RootFlags{Account: "a@b.com"}
 	out := captureStdout(t, func() {
 		if err := runKong(t, &PeopleRawCmd{}, []string{"people/c1"}, ctx, flags); err != nil {
@@ -76,9 +76,8 @@ func TestPeopleRaw_HappyPath(t *testing.T) {
 func TestContactsRaw_HappyPath(t *testing.T) {
 	srv := newPeopleRawTestServer(t, 0, fullPersonResponse())
 	defer srv.Close()
-	installMockPeopleContactsService(t, srv)
 
-	ctx := rawTestContext(t)
+	ctx := withMockPeopleContactsService(t, rawTestContext(t), srv)
 	flags := &RootFlags{Account: "a@b.com"}
 	out := captureStdout(t, func() {
 		if err := runKong(t, &ContactsRawCmd{}, []string{"people/c1"}, ctx, flags); err != nil {
@@ -117,9 +116,8 @@ func TestContactsRaw_EmailResolvesContactResource(t *testing.T) {
 		}
 	}))
 	defer srv.Close()
-	installMockPeopleContactsService(t, srv)
 
-	ctx := rawTestContext(t)
+	ctx := withMockPeopleContactsService(t, rawTestContext(t), srv)
 	flags := &RootFlags{Account: "a@b.com"}
 	out := captureStdout(t, func() {
 		if err := runKong(t, &ContactsRawCmd{}, []string{"ada@example.com"}, ctx, flags); err != nil {
@@ -161,9 +159,8 @@ func TestContactsRaw_EmailAmbiguousContactsFails(t *testing.T) {
 		}
 	}))
 	defer srv.Close()
-	installMockPeopleContactsService(t, srv)
 
-	ctx := rawTestContext(t)
+	ctx := withMockPeopleContactsService(t, rawTestContext(t), srv)
 	flags := &RootFlags{Account: "a@b.com"}
 	_ = captureStdout(t, func() {
 		if err := runKong(t, &ContactsRawCmd{}, []string{"ada@example.com"}, ctx, flags); err != nil {
@@ -179,9 +176,8 @@ func TestContactsRaw_EmailAmbiguousContactsFails(t *testing.T) {
 func TestPeopleRaw_APIError(t *testing.T) {
 	srv := newPeopleRawTestServer(t, http.StatusInternalServerError, nil)
 	defer srv.Close()
-	installMockPeopleContactsService(t, srv)
 
-	ctx := rawTestContext(t)
+	ctx := withMockPeopleContactsService(t, rawTestContext(t), srv)
 	flags := &RootFlags{Account: "a@b.com"}
 	_ = captureStdout(t, func() {
 		if err := runKong(t, &PeopleRawCmd{}, []string{"people/c1"}, ctx, flags); err == nil {

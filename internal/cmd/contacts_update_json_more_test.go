@@ -54,13 +54,11 @@ func TestContactsUpdate_FromFile_JSON_CanClearFields(t *testing.T) {
 		}
 	}))
 	t.Cleanup(closeSrv)
-	stubPeopleServices(t, svc)
-
 	u, err := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
 	if err != nil {
 		t.Fatalf("ui.New: %v", err)
 	}
-	ctx := ui.WithUI(context.Background(), u)
+	ctx := withStubPeopleServices(ui.WithUI(context.Background(), u), svc)
 
 	withStdin(t, `{"resourceName":"people/c1","etag":"etag-cur","urls":[],"biographies":null}`, func() {
 		if err := runKong(t, &ContactsUpdateCmd{}, []string{"people/c1", "--from-file", "-"}, ctx, &RootFlags{Account: "a@b.com"}); err != nil {
@@ -85,10 +83,8 @@ func TestContactsUpdate_FromFile_JSON_UnsupportedFieldErrors(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	t.Cleanup(closeSrv)
-	stubPeopleServices(t, svc)
-
 	withStdin(t, `{"resourceName":"people/c1","photos":[]}`, func() {
-		err := runKong(t, &ContactsUpdateCmd{}, []string{"people/c1", "--from-file", "-"}, context.Background(), &RootFlags{Account: "a@b.com"})
+		err := runKong(t, &ContactsUpdateCmd{}, []string{"people/c1", "--from-file", "-"}, withStubPeopleServices(context.Background(), svc), &RootFlags{Account: "a@b.com"})
 		if err == nil || !strings.Contains(err.Error(), "photos") {
 			t.Fatalf("expected unsupported field error mentioning photos, got %v", err)
 		}
@@ -114,10 +110,8 @@ func TestContactsUpdate_FromFile_JSON_ETagMismatch(t *testing.T) {
 		}
 	}))
 	t.Cleanup(closeSrv)
-	stubPeopleServices(t, svc)
-
 	withStdin(t, `{"resourceName":"people/c1","etag":"etag-old","urls":[{"value":"https://example.com"}]}`, func() {
-		err := runKong(t, &ContactsUpdateCmd{}, []string{"people/c1", "--from-file", "-"}, context.Background(), &RootFlags{Account: "a@b.com"})
+		err := runKong(t, &ContactsUpdateCmd{}, []string{"people/c1", "--from-file", "-"}, withStubPeopleServices(context.Background(), svc), &RootFlags{Account: "a@b.com"})
 		if err == nil || !strings.Contains(err.Error(), "etag mismatch") {
 			t.Fatalf("expected etag mismatch error, got %v", err)
 		}
@@ -154,13 +148,11 @@ func TestContactsUpdate_FromFile_JSON_IgnoreETagAllowsUpdate(t *testing.T) {
 		}
 	}))
 	t.Cleanup(closeSrv)
-	stubPeopleServices(t, svc)
-
 	u, err := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
 	if err != nil {
 		t.Fatalf("ui.New: %v", err)
 	}
-	ctx := ui.WithUI(context.Background(), u)
+	ctx := withStubPeopleServices(ui.WithUI(context.Background(), u), svc)
 
 	withStdin(t, `{"resourceName":"people/c1","etag":"etag-old","urls":[{"value":"https://example.com"}]}`, func() {
 		if err := runKong(t, &ContactsUpdateCmd{}, []string{"people/c1", "--from-file", "-", "--ignore-etag"}, ctx, &RootFlags{Account: "a@b.com"}); err != nil {
@@ -178,8 +170,6 @@ func TestContactsUpdate_FromFile_CantCombineWithFlags(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	t.Cleanup(closeSrv)
-	stubPeopleServices(t, svc)
-
 	tmp, err := os.CreateTemp(t.TempDir(), "contact-*.json")
 	if err != nil {
 		t.Fatalf("CreateTemp: %v", err)
@@ -190,7 +180,8 @@ func TestContactsUpdate_FromFile_CantCombineWithFlags(t *testing.T) {
 	_ = tmp.Close()
 
 	// Previously covered: --email
-	err = runKong(t, &ContactsUpdateCmd{}, []string{"people/c1", "--from-file", tmp.Name(), "--email", "x@example.com"}, context.Background(), &RootFlags{Account: "a@b.com"})
+	ctx := withStubPeopleServices(context.Background(), svc)
+	err = runKong(t, &ContactsUpdateCmd{}, []string{"people/c1", "--from-file", tmp.Name(), "--email", "x@example.com"}, ctx, &RootFlags{Account: "a@b.com"})
 	if err == nil || !strings.Contains(err.Error(), "can't combine --from-file") {
 		t.Fatalf("expected combine error for --email, got %v", err)
 	}
@@ -209,7 +200,7 @@ func TestContactsUpdate_FromFile_CantCombineWithFlags(t *testing.T) {
 	}
 	for _, tc := range conflictCases {
 		args := append([]string{"people/c1", "--from-file", tmp.Name()}, tc.extra...)
-		runErr := runKong(t, &ContactsUpdateCmd{}, args, context.Background(), &RootFlags{Account: "a@b.com"})
+		runErr := runKong(t, &ContactsUpdateCmd{}, args, ctx, &RootFlags{Account: "a@b.com"})
 		if runErr == nil || !strings.Contains(runErr.Error(), "can't combine --from-file") {
 			t.Fatalf("expected combine error for --%s, got %v", tc.name, runErr)
 		}

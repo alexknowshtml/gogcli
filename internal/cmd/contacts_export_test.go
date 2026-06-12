@@ -53,16 +53,14 @@ func TestContactsExport_AllVCF_PaginatesAndIncludesCategories(t *testing.T) {
 		}
 	}))
 	t.Cleanup(closeSrv)
-	stubPeopleServices(t, svc)
 
-	out := captureStdout(t, func() {
-		_ = captureStderr(t, func() {
-			err := Execute([]string{"--account", "a@b.com", "contacts", "export", "--all", "--page-size", "1", "--out", "-"})
-			if err != nil {
-				t.Fatalf("Execute: %v", err)
-			}
-		})
+	result := executeWithPeopleTestServices(t, []string{"--account", "a@b.com", "contacts", "export", "--all", "--page-size", "1", "--out", "-"}, peopleTestServices{
+		Contacts: fixedPeopleTestService(svc),
 	})
+	if result.err != nil {
+		t.Fatalf("Execute: %v", result.err)
+	}
+	out := result.stdout
 
 	for _, want := range []string{
 		"BEGIN:VCARD\r\nVERSION:4.0\r\n",
@@ -113,16 +111,14 @@ func TestContactsExport_SelectorEmailExactMatch(t *testing.T) {
 		})
 	}))
 	t.Cleanup(closeSrv)
-	stubPeopleServices(t, svc)
 
-	out := captureStdout(t, func() {
-		_ = captureStderr(t, func() {
-			err := Execute([]string{"--account", "a@b.com", "contacts", "export", "ada@example.com", "--out", "-"})
-			if err != nil {
-				t.Fatalf("Execute: %v", err)
-			}
-		})
+	result := executeWithPeopleTestServices(t, []string{"--account", "a@b.com", "contacts", "export", "ada@example.com", "--out", "-"}, peopleTestServices{
+		Contacts: fixedPeopleTestService(svc),
 	})
+	if result.err != nil {
+		t.Fatalf("Execute: %v", result.err)
+	}
+	out := result.stdout
 	if !strings.Contains(out, "FN:Right Ada\r\n") || strings.Contains(out, "Wrong Ada") {
 		t.Fatalf("unexpected VCF:\n%s", out)
 	}
@@ -147,9 +143,8 @@ func TestContactsExport_AmbiguousSelectorErrors(t *testing.T) {
 		})
 	}))
 	t.Cleanup(closeSrv)
-	stubPeopleServices(t, svc)
 
-	err := runKong(t, &ContactsExportCmd{}, []string{"Ada"}, context.Background(), &RootFlags{Account: "a@b.com"})
+	err := runKong(t, &ContactsExportCmd{}, []string{"Ada"}, withPeopleContactsTestService(context.Background(), svc), &RootFlags{Account: "a@b.com"})
 	if err == nil || !strings.Contains(err.Error(), "ambiguous contact selector") {
 		t.Fatalf("expected ambiguous selector error, got %v", err)
 	}

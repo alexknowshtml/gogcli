@@ -33,18 +33,11 @@ func newPeopleService(t *testing.T, handler http.HandlerFunc) (*people.Service, 
 	return svc, srv.Close
 }
 
-func stubPeopleServices(t *testing.T, svc *people.Service) {
-	t.Helper()
-
-	origOther := newPeopleOtherContactsService
-	origContacts := newPeopleContactsService
-	t.Cleanup(func() {
-		newPeopleOtherContactsService = origOther
-		newPeopleContactsService = origContacts
+func withStubPeopleServices(ctx context.Context, svc *people.Service) context.Context {
+	return withPeopleTestServices(ctx, peopleTestServices{
+		Contacts: fixedPeopleTestService(svc),
+		Other:    fixedPeopleTestService(svc),
 	})
-
-	newPeopleOtherContactsService = func(context.Context, string) (*people.Service, error) { return svc, nil }
-	newPeopleContactsService = func(context.Context, string) (*people.Service, error) { return svc, nil }
 }
 
 func TestContactsListAndGet_NoResults_Text(t *testing.T) {
@@ -64,7 +57,6 @@ func TestContactsListAndGet_NoResults_Text(t *testing.T) {
 		}
 	}))
 	t.Cleanup(closeSrv)
-	stubPeopleServices(t, svc)
 
 	flags := &RootFlags{Account: "a@b.com"}
 	errOut := captureStderr(t, func() {
@@ -73,7 +65,7 @@ func TestContactsListAndGet_NoResults_Text(t *testing.T) {
 			if uiErr != nil {
 				t.Fatalf("ui.New: %v", uiErr)
 			}
-			ctx := ui.WithUI(context.Background(), u)
+			ctx := withStubPeopleServices(ui.WithUI(context.Background(), u), svc)
 
 			if err := runKong(t, &ContactsListCmd{}, []string{}, ctx, flags); err != nil {
 				t.Fatalf("list: %v", err)
@@ -148,10 +140,9 @@ func TestContactsOtherDelete_Success_JSON(t *testing.T) {
 		}
 	}))
 	t.Cleanup(closeSrv)
-	stubPeopleServices(t, svc)
 
 	flags := &RootFlags{Account: "a@b.com", Force: true}
-	ctx := outfmt.WithMode(context.Background(), outfmt.Mode{JSON: true})
+	ctx := withStubPeopleServices(outfmt.WithMode(context.Background(), outfmt.Mode{JSON: true}), svc)
 
 	out := captureStdout(t, func() {
 		if err := runKong(t, &ContactsOtherDeleteCmd{}, []string{"otherContacts/abc123"}, ctx, flags); err != nil {
@@ -191,7 +182,6 @@ func TestContactsOtherDelete_Success_Text(t *testing.T) {
 		}
 	}))
 	t.Cleanup(closeSrv)
-	stubPeopleServices(t, svc)
 
 	flags := &RootFlags{Account: "a@b.com", Force: true}
 
@@ -202,7 +192,7 @@ func TestContactsOtherDelete_Success_Text(t *testing.T) {
 			if uiErr != nil {
 				t.Fatalf("ui.New: %v", uiErr)
 			}
-			ctx := ui.WithUI(context.Background(), u)
+			ctx := withStubPeopleServices(ui.WithUI(context.Background(), u), svc)
 
 			if err := runKong(t, &ContactsOtherDeleteCmd{}, []string{"otherContacts/xyz789"}, ctx, flags); err != nil {
 				t.Fatalf("delete: %v", err)
@@ -237,11 +227,10 @@ func TestContactsOtherDelete_CopyFailure(t *testing.T) {
 		}
 	}))
 	t.Cleanup(closeSrv)
-	stubPeopleServices(t, svc)
 
 	flags := &RootFlags{Account: "a@b.com", Force: true}
 
-	err := runKong(t, &ContactsOtherDeleteCmd{}, []string{"otherContacts/abc123"}, context.Background(), flags)
+	err := runKong(t, &ContactsOtherDeleteCmd{}, []string{"otherContacts/abc123"}, withStubPeopleServices(context.Background(), svc), flags)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -263,11 +252,10 @@ func TestContactsOtherDelete_CopyMissingResource(t *testing.T) {
 		}
 	}))
 	t.Cleanup(closeSrv)
-	stubPeopleServices(t, svc)
 
 	flags := &RootFlags{Account: "a@b.com", Force: true}
 
-	err := runKong(t, &ContactsOtherDeleteCmd{}, []string{"otherContacts/abc123"}, context.Background(), flags)
+	err := runKong(t, &ContactsOtherDeleteCmd{}, []string{"otherContacts/abc123"}, withStubPeopleServices(context.Background(), svc), flags)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -303,11 +291,10 @@ func TestContactsOtherDelete_DeleteFailure(t *testing.T) {
 		}
 	}))
 	t.Cleanup(closeSrv)
-	stubPeopleServices(t, svc)
 
 	flags := &RootFlags{Account: "a@b.com", Force: true}
 
-	err := runKong(t, &ContactsOtherDeleteCmd{}, []string{"otherContacts/abc123"}, context.Background(), flags)
+	err := runKong(t, &ContactsOtherDeleteCmd{}, []string{"otherContacts/abc123"}, withStubPeopleServices(context.Background(), svc), flags)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}

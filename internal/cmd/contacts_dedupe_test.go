@@ -83,15 +83,14 @@ func TestContactsDedupeExecuteJSON(t *testing.T) {
 		})
 	}))
 	defer closeSrv()
-	stubPeopleServices(t, svc)
 
-	out := captureStdout(t, func() {
-		_ = captureStderr(t, func() {
-			if err := Execute([]string{"--json", "--account", "a@example.com", "contacts", "dedupe"}); err != nil {
-				t.Fatalf("Execute: %v", err)
-			}
-		})
+	result := executeWithPeopleTestServices(t, []string{"--json", "--account", "a@example.com", "contacts", "dedupe"}, peopleTestServices{
+		Contacts: fixedPeopleTestService(svc),
 	})
+	if result.err != nil {
+		t.Fatalf("Execute: %v", result.err)
+	}
+	out := result.stdout
 	var parsed struct {
 		Scanned int `json:"scanned"`
 		Groups  []struct {

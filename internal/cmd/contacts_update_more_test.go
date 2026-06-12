@@ -54,13 +54,11 @@ func TestContactsUpdate_BirthdayAndNotes_Set(t *testing.T) {
 		}
 	}))
 	t.Cleanup(closeSrv)
-	stubPeopleServices(t, svc)
-
 	u, err := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
 	if err != nil {
 		t.Fatalf("ui.New: %v", err)
 	}
-	ctx := ui.WithUI(context.Background(), u)
+	ctx := withStubPeopleServices(ui.WithUI(context.Background(), u), svc)
 
 	if err := runKong(t, &ContactsUpdateCmd{}, []string{"people/c1", "--birthday", "2026-02-13", "--notes", "note text"}, ctx, &RootFlags{Account: "a@b.com"}); err != nil {
 		t.Fatalf("runKong: %v", err)
@@ -103,13 +101,11 @@ func TestContactsUpdate_BirthdayAndNotes_Clear(t *testing.T) {
 		}
 	}))
 	t.Cleanup(closeSrv)
-	stubPeopleServices(t, svc)
-
 	u, err := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
 	if err != nil {
 		t.Fatalf("ui.New: %v", err)
 	}
-	ctx := ui.WithUI(context.Background(), u)
+	ctx := withStubPeopleServices(ui.WithUI(context.Background(), u), svc)
 
 	if err := runKong(t, &ContactsUpdateCmd{}, []string{"people/c1", "--birthday", "", "--notes", ""}, ctx, &RootFlags{Account: "a@b.com"}); err != nil {
 		t.Fatalf("runKong: %v", err)
@@ -132,9 +128,7 @@ func TestContactsUpdate_InvalidBirthday(t *testing.T) {
 		}
 	}))
 	t.Cleanup(closeSrv)
-	stubPeopleServices(t, svc)
-
-	err := runKong(t, &ContactsUpdateCmd{}, []string{"people/c1", "--birthday", "2026/02/13"}, context.Background(), &RootFlags{Account: "a@b.com"})
+	err := runKong(t, &ContactsUpdateCmd{}, []string{"people/c1", "--birthday", "2026/02/13"}, withStubPeopleServices(context.Background(), svc), &RootFlags{Account: "a@b.com"})
 	if err == nil || !strings.Contains(err.Error(), "invalid --birthday") {
 		t.Fatalf("expected invalid --birthday error, got %v", err)
 	}
@@ -193,13 +187,11 @@ func TestContactsUpdate_Relation_Set(t *testing.T) {
 		}
 	}))
 	t.Cleanup(closeSrv)
-	stubPeopleServices(t, svc)
-
 	u, err := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
 	if err != nil {
 		t.Fatalf("ui.New: %v", err)
 	}
-	ctx := ui.WithUI(context.Background(), u)
+	ctx := withStubPeopleServices(ui.WithUI(context.Background(), u), svc)
 
 	if err := runKong(t, &ContactsUpdateCmd{}, []string{"people/c1", "--relation", "spouse=Jane", "--relation", "friend=Bob"}, ctx, &RootFlags{Account: "a@b.com"}); err != nil {
 		t.Fatalf("runKong: %v", err)
@@ -244,13 +236,11 @@ func TestContactsUpdate_Relation_Clear(t *testing.T) {
 		}
 	}))
 	t.Cleanup(closeSrv)
-	stubPeopleServices(t, svc)
-
 	u, err := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
 	if err != nil {
 		t.Fatalf("ui.New: %v", err)
 	}
-	ctx := ui.WithUI(context.Background(), u)
+	ctx := withStubPeopleServices(ui.WithUI(context.Background(), u), svc)
 
 	if err := runKong(t, &ContactsUpdateCmd{}, []string{"people/c1", "--relation", ""}, ctx, &RootFlags{Account: "a@b.com"}); err != nil {
 		t.Fatalf("runKong: %v", err)
@@ -286,13 +276,11 @@ func TestContactsCreate_Relation_Set(t *testing.T) {
 		}
 	}))
 	t.Cleanup(closeSrv)
-	stubPeopleServices(t, svc)
-
 	u, err := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
 	if err != nil {
 		t.Fatalf("ui.New: %v", err)
 	}
-	ctx := ui.WithUI(context.Background(), u)
+	ctx := withStubPeopleServices(ui.WithUI(context.Background(), u), svc)
 
 	if err := runKong(t, &ContactsCreateCmd{}, []string{"--given", "Ada", "--relation", "spouse=Charles", "--relation", "friend=Bob"}, ctx, &RootFlags{Account: "a@b.com"}); err != nil {
 		t.Fatalf("runKong: %v", err)
@@ -345,13 +333,11 @@ func TestContactsUpdate_Address_Set(t *testing.T) {
 		}
 	}))
 	t.Cleanup(closeSrv)
-	stubPeopleServices(t, svc)
-
 	u, err := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
 	if err != nil {
 		t.Fatalf("ui.New: %v", err)
 	}
-	ctx := ui.WithUI(context.Background(), u)
+	ctx := withStubPeopleServices(ui.WithUI(context.Background(), u), svc)
 
 	if err := runKong(t, &ContactsUpdateCmd{}, []string{"people/c1", "--address", "123 Main St", "--address", "456 Side St"}, ctx, &RootFlags{Account: "a@b.com"}); err != nil {
 		t.Fatalf("runKong: %v", err)
@@ -396,13 +382,11 @@ func TestContactsUpdate_Address_Clear(t *testing.T) {
 		}
 	}))
 	t.Cleanup(closeSrv)
-	stubPeopleServices(t, svc)
-
 	u, err := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
 	if err != nil {
 		t.Fatalf("ui.New: %v", err)
 	}
-	ctx := ui.WithUI(context.Background(), u)
+	ctx := withStubPeopleServices(ui.WithUI(context.Background(), u), svc)
 
 	if err := runKong(t, &ContactsUpdateCmd{}, []string{"people/c1", "--address", ""}, ctx, &RootFlags{Account: "a@b.com"}); err != nil {
 		t.Fatalf("runKong: %v", err)
@@ -438,13 +422,11 @@ func TestContactsCreate_Address_Set(t *testing.T) {
 		}
 	}))
 	t.Cleanup(closeSrv)
-	stubPeopleServices(t, svc)
-
 	u, err := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
 	if err != nil {
 		t.Fatalf("ui.New: %v", err)
 	}
-	ctx := ui.WithUI(context.Background(), u)
+	ctx := withStubPeopleServices(ui.WithUI(context.Background(), u), svc)
 
 	if err := runKong(t, &ContactsCreateCmd{}, []string{"--given", "Ada", "--address", "123 Main St", "--address", "456 Side St"}, ctx, &RootFlags{Account: "a@b.com"}); err != nil {
 		t.Fatalf("runKong: %v", err)
@@ -486,13 +468,11 @@ func TestContactsCreate_Gender_Set(t *testing.T) {
 		}
 	}))
 	t.Cleanup(closeSrv)
-	stubPeopleServices(t, svc)
-
 	u, err := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
 	if err != nil {
 		t.Fatalf("ui.New: %v", err)
 	}
-	ctx := ui.WithUI(context.Background(), u)
+	ctx := withStubPeopleServices(ui.WithUI(context.Background(), u), svc)
 
 	if err := runKong(t, &ContactsCreateCmd{}, []string{"--given", "Ada", "--gender", "female"}, ctx, &RootFlags{Account: "a@b.com"}); err != nil {
 		t.Fatalf("runKong: %v", err)
@@ -540,13 +520,11 @@ func TestContactsUpdate_Gender_SetAndClear(t *testing.T) {
 		}
 	}))
 	t.Cleanup(closeSrv)
-	stubPeopleServices(t, svc)
-
 	u, err := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
 	if err != nil {
 		t.Fatalf("ui.New: %v", err)
 	}
-	ctx := ui.WithUI(context.Background(), u)
+	ctx := withStubPeopleServices(ui.WithUI(context.Background(), u), svc)
 
 	if err := runKong(t, &ContactsUpdateCmd{}, []string{"people/c1", "--gender", "male"}, ctx, &RootFlags{Account: "a@b.com"}); err != nil {
 		t.Fatalf("runKong set: %v", err)

@@ -44,9 +44,6 @@ func TestAllContactEmailsDedupes(t *testing.T) {
 }
 
 func TestGmailFromContactQuery_WarmsContactsSearchCache(t *testing.T) {
-	origNew := newPeopleContactsService
-	t.Cleanup(func() { newPeopleContactsService = origNew })
-
 	var queries []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.Contains(r.URL.Path, "people:searchContacts") {
@@ -84,9 +81,8 @@ func TestGmailFromContactQuery_WarmsContactsSearchCache(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewService: %v", err)
 	}
-	newPeopleContactsService = func(context.Context, string) (*people.Service, error) { return svc, nil }
 
-	got, err := gmailFromContactQuery(context.Background(), "a@b.com", "Alice")
+	got, err := gmailFromContactQuery(withPeopleContactsTestService(context.Background(), svc), "a@b.com", "Alice")
 	if err != nil {
 		t.Fatalf("gmailFromContactQuery: %v", err)
 	}
