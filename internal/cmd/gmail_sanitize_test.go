@@ -1,16 +1,12 @@
 package cmd
 
 import (
-	"context"
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
-
-	"google.golang.org/api/gmail/v1"
-	"google.golang.org/api/option"
 )
 
 func TestSanitizeGmailBody(t *testing.T) {
@@ -56,9 +52,6 @@ func TestSanitizeGmailBody(t *testing.T) {
 }
 
 func TestGmailGetCmd_SanitizeContent_JSONUsesSafeEnvelope(t *testing.T) {
-	origNew := newGmailService
-	t.Cleanup(func() { newGmailService = origNew })
-
 	htmlBody := base64.RawURLEncoding.EncodeToString([]byte(
 		`<html><body><script>fetch("https://tracker.example/open")</script><p>Hello https://phish.example/login</p></body></html>`,
 	))
@@ -89,30 +82,20 @@ func TestGmailGetCmd_SanitizeContent_JSONUsesSafeEnvelope(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	svc, err := gmail.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
+	result := executeWithGmailTestService(
+		t,
+		[]string{"--json", "--account", "a@b.com", "gmail", "get", "m1", "--sanitize-content"},
+		newGmailServiceFromServer(t, srv),
 	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
+	if result.err != nil {
+		t.Fatalf("Execute: %v\nstderr=%q", result.err, result.stderr)
 	}
-	newGmailService = func(context.Context, string) (*gmail.Service, error) { return svc, nil }
 
-	out := captureStdout(t, func() {
-		_ = captureStderr(t, func() {
-			err := Execute([]string{"--json", "--account", "a@b.com", "gmail", "get", "m1", "--sanitize-content"})
-			if err != nil {
-				t.Fatalf("Execute: %v", err)
-			}
-		})
-	})
-
-	if strings.Contains(out, "https://") || strings.Contains(out, "tracker.example") || strings.Contains(out, htmlBody) {
-		t.Fatalf("sanitized JSON leaked unsafe content: %s", out)
+	if strings.Contains(result.stdout, "https://") || strings.Contains(result.stdout, "tracker.example") || strings.Contains(result.stdout, htmlBody) {
+		t.Fatalf("sanitized JSON leaked unsafe content: %s", result.stdout)
 	}
-	if strings.Contains(out, "payload") || strings.Contains(out, "unsubscribe") {
-		t.Fatalf("sanitized JSON should not expose raw Gmail payload/unsubscribe: %s", out)
+	if strings.Contains(result.stdout, "payload") || strings.Contains(result.stdout, "unsubscribe") {
+		t.Fatalf("sanitized JSON should not expose raw Gmail payload/unsubscribe: %s", result.stdout)
 	}
 	var parsed struct {
 		Body    string `json:"body"`
@@ -121,7 +104,7 @@ func TestGmailGetCmd_SanitizeContent_JSONUsesSafeEnvelope(t *testing.T) {
 			Headers map[string]string `json:"headers"`
 		} `json:"message"`
 	}
-	if err := json.Unmarshal([]byte(out), &parsed); err != nil {
+	if err := json.Unmarshal([]byte(result.stdout), &parsed); err != nil {
 		t.Fatalf("decode JSON: %v", err)
 	}
 	if parsed.Body != "Hello [url removed]" {
@@ -133,16 +116,13 @@ func TestGmailGetCmd_SanitizeContent_JSONUsesSafeEnvelope(t *testing.T) {
 }
 
 func TestGmailGetCmd_SanitizeContentRejectsRaw(t *testing.T) {
-	err := Execute([]string{"--account", "a@b.com", "gmail", "get", "m1", "--format", "raw", "--sanitize-content"})
-	if err == nil || !strings.Contains(err.Error(), "--sanitize-content cannot be used with --format raw") {
-		t.Fatalf("expected raw/sanitize usage error, got: %v", err)
+	result := executeWithTestRuntime(t, []string{"--account", "a@b.com", "gmail", "get", "m1", "--format", "raw", "--sanitize-content"}, nil)
+	if result.err == nil || !strings.Contains(result.err.Error(), "--sanitize-content cannot be used with --format raw") {
+		t.Fatalf("expected raw/sanitize usage error, got: %v", result.err)
 	}
 }
 
 func TestGmailThreadGet_SanitizeContent_JSONUsesSafeEnvelope(t *testing.T) {
-	origNew := newGmailService
-	t.Cleanup(func() { newGmailService = origNew })
-
 	htmlBody := base64.RawURLEncoding.EncodeToString([]byte(
 		`<style>.x{background:url(https://tracker.example)}</style><p>Hello https://phish.example/login</p>`,
 	))
@@ -177,37 +157,27 @@ func TestGmailThreadGet_SanitizeContent_JSONUsesSafeEnvelope(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	svc, err := gmail.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
+	result := executeWithGmailTestService(
+		t,
+		[]string{"--json", "--account", "a@b.com", "gmail", "thread", "get", "t1", "--sanitize-content"},
+		newGmailServiceFromServer(t, srv),
 	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
+	if result.err != nil {
+		t.Fatalf("Execute: %v\nstderr=%q", result.err, result.stderr)
 	}
-	newGmailService = func(context.Context, string) (*gmail.Service, error) { return svc, nil }
 
-	out := captureStdout(t, func() {
-		_ = captureStderr(t, func() {
-			err := Execute([]string{"--json", "--account", "a@b.com", "gmail", "thread", "get", "t1", "--sanitize-content"})
-			if err != nil {
-				t.Fatalf("Execute: %v", err)
-			}
-		})
-	})
-
-	if strings.Contains(out, "https://") || strings.Contains(out, "tracker.example") || strings.Contains(out, htmlBody) {
-		t.Fatalf("sanitized thread JSON leaked unsafe content: %s", out)
+	if strings.Contains(result.stdout, "https://") || strings.Contains(result.stdout, "tracker.example") || strings.Contains(result.stdout, htmlBody) {
+		t.Fatalf("sanitized thread JSON leaked unsafe content: %s", result.stdout)
 	}
-	if strings.Contains(out, "payload") || strings.Contains(out, "unsubscribe") {
-		t.Fatalf("sanitized thread JSON should not expose raw Gmail payload/unsubscribe: %s", out)
+	if strings.Contains(result.stdout, "payload") || strings.Contains(result.stdout, "unsubscribe") {
+		t.Fatalf("sanitized thread JSON should not expose raw Gmail payload/unsubscribe: %s", result.stdout)
 	}
 	var parsed struct {
 		Thread struct {
 			Messages []gmailSanitizedMessageOutput `json:"messages"`
 		} `json:"thread"`
 	}
-	if err := json.Unmarshal([]byte(out), &parsed); err != nil {
+	if err := json.Unmarshal([]byte(result.stdout), &parsed); err != nil {
 		t.Fatalf("decode JSON: %v", err)
 	}
 	if len(parsed.Thread.Messages) != 1 {

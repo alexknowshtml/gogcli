@@ -1,26 +1,16 @@
 package cmd
 
 import (
-	"context"
+	"bytes"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
-
-	"google.golang.org/api/gmail/v1"
-	"google.golang.org/api/option"
-
-	"github.com/steipete/gogcli/internal/outfmt"
-	"github.com/steipete/gogcli/internal/ui"
 )
 
 func TestGmailThreadModifyCmd_JSON(t *testing.T) {
-	origNew := newGmailService
-	t.Cleanup(func() { newGmailService = origNew })
-
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodGet && (strings.HasSuffix(r.URL.Path, "/users/me/labels") || strings.HasSuffix(r.URL.Path, "/gmail/v1/users/me/labels")):
@@ -56,42 +46,26 @@ func TestGmailThreadModifyCmd_JSON(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	svc, err := gmail.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
-	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
-	newGmailService = func(context.Context, string) (*gmail.Service, error) { return svc, nil }
-
+	svc := newGmailServiceFromServer(t, srv)
 	flags := &RootFlags{Account: "a@b.com"}
 
-	out := captureStdout(t, func() {
-		u, uiErr := ui.New(ui.Options{Stdout: io.Discard, Stderr: io.Discard, Color: "never"})
-		if uiErr != nil {
-			t.Fatalf("ui.New: %v", uiErr)
-		}
-		ctx := ui.WithUI(context.Background(), u)
-		ctx = outfmt.WithMode(ctx, outfmt.Mode{JSON: true})
-
-		if err := runKong(t, &GmailThreadModifyCmd{}, []string{
-			"t1",
-			"--add", "INBOX",
-			"--remove", "Custom",
-		}, ctx, flags); err != nil {
-			t.Fatalf("execute: %v", err)
-		}
-	})
+	var jsonOut bytes.Buffer
+	jsonCtx := withGmailTestService(newCmdRuntimeJSONOutputContext(t, &jsonOut, io.Discard), svc)
+	if err := runKong(t, &GmailThreadModifyCmd{}, []string{
+		"t1",
+		"--add", "INBOX",
+		"--remove", "Custom",
+	}, jsonCtx, flags); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
 
 	var parsed struct {
 		Modified      string   `json:"modified"`
 		AddedLabels   []string `json:"addedLabels"`
 		RemovedLabels []string `json:"removedLabels"`
 	}
-	if err := json.Unmarshal([]byte(out), &parsed); err != nil {
-		t.Fatalf("json parse: %v\nout=%q", err, out)
+	if err := json.Unmarshal(jsonOut.Bytes(), &parsed); err != nil {
+		t.Fatalf("json parse: %v\nout=%q", err, jsonOut.String())
 	}
 	if parsed.Modified != "t1" {
 		t.Fatalf("unexpected modified: %q", parsed.Modified)
@@ -103,22 +77,16 @@ func TestGmailThreadModifyCmd_JSON(t *testing.T) {
 		t.Fatalf("unexpected removed labels: %#v", parsed.RemovedLabels)
 	}
 
-	plainOut := captureStdout(t, func() {
-		u, uiErr := ui.New(ui.Options{Stdout: os.Stdout, Stderr: io.Discard, Color: "never"})
-		if uiErr != nil {
-			t.Fatalf("ui.New: %v", uiErr)
-		}
-		ctx := ui.WithUI(context.Background(), u)
-
-		if err := runKong(t, &GmailThreadModifyCmd{}, []string{
-			"t1",
-			"--add", "INBOX",
-			"--remove", "Custom",
-		}, ctx, flags); err != nil {
-			t.Fatalf("execute plain: %v", err)
-		}
-	})
-	if !strings.Contains(plainOut, "Modified thread") {
-		t.Fatalf("unexpected plain output: %q", plainOut)
+	var plainOut bytes.Buffer
+	plainCtx := withGmailTestService(newCmdRuntimeOutputContext(t, &plainOut, io.Discard), svc)
+	if err := runKong(t, &GmailThreadModifyCmd{}, []string{
+		"t1",
+		"--add", "INBOX",
+		"--remove", "Custom",
+	}, plainCtx, flags); err != nil {
+		t.Fatalf("execute plain: %v", err)
+	}
+	if !strings.Contains(plainOut.String(), "Modified thread") {
+		t.Fatalf("unexpected plain output: %q", plainOut.String())
 	}
 }

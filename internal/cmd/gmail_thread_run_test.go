@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
@@ -10,15 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"google.golang.org/api/gmail/v1"
-	"google.golang.org/api/option"
 )
 
 func TestGmailThreadGetAndAttachments_JSON(t *testing.T) {
-	origNew := newGmailService
-	t.Cleanup(func() { newGmailService = origNew })
-
 	attachmentData := base64.RawURLEncoding.EncodeToString([]byte("payload"))
 	threadResp := map[string]any{
 		"id": "t1",
@@ -100,30 +93,18 @@ func TestGmailThreadGetAndAttachments_JSON(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	svc, err := gmail.NewService(context.Background(),
-		option.WithoutAuthentication(),
-		option.WithHTTPClient(srv.Client()),
-		option.WithEndpoint(srv.URL+"/"),
-	)
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
-	newGmailService = func(context.Context, string) (*gmail.Service, error) { return svc, nil }
-
+	svc := newGmailServiceFromServer(t, srv)
 	outDir := t.TempDir()
-	getOut := captureStdout(t, func() {
-		_ = captureStderr(t, func() {
-			if err := Execute([]string{"--json", "--account", "a@b.com", "gmail", "thread", "get", "t1", "--download", "--out-dir", outDir}); err != nil {
-				t.Fatalf("Execute thread get: %v", err)
-			}
-		})
-	})
+	getResult := executeWithGmailTestService(t, []string{"--json", "--account", "a@b.com", "gmail", "thread", "get", "t1", "--download", "--out-dir", outDir}, svc)
+	if getResult.err != nil {
+		t.Fatalf("Execute thread get: %v\nstderr=%q", getResult.err, getResult.stderr)
+	}
 
 	var payload struct {
 		Thread     map[string]any   `json:"thread"`
 		Downloaded []map[string]any `json:"downloaded"`
 	}
-	if err := json.Unmarshal([]byte(getOut), &payload); err != nil {
+	if err := json.Unmarshal([]byte(getResult.stdout), &payload); err != nil {
 		t.Fatalf("decode thread json: %v", err)
 	}
 	if payload.Thread == nil || len(payload.Downloaded) != 1 {
@@ -137,18 +118,15 @@ func TestGmailThreadGetAndAttachments_JSON(t *testing.T) {
 		t.Fatalf("expected downloaded file: %v", statErr)
 	}
 
-	attachmentsOut := captureStdout(t, func() {
-		_ = captureStderr(t, func() {
-			if err := Execute([]string{"--json", "--account", "a@b.com", "gmail", "thread", "attachments", "t1"}); err != nil {
-				t.Fatalf("Execute attachments: %v", err)
-			}
-		})
-	})
+	attachmentsResult := executeWithGmailTestService(t, []string{"--json", "--account", "a@b.com", "gmail", "thread", "attachments", "t1"}, svc)
+	if attachmentsResult.err != nil {
+		t.Fatalf("Execute attachments: %v\nstderr=%q", attachmentsResult.err, attachmentsResult.stderr)
+	}
 	var attachments struct {
 		ThreadID    string           `json:"threadId"`
 		Attachments []map[string]any `json:"attachments"`
 	}
-	if err := json.Unmarshal([]byte(attachmentsOut), &attachments); err != nil {
+	if err := json.Unmarshal([]byte(attachmentsResult.stdout), &attachments); err != nil {
 		t.Fatalf("decode attachments json: %v", err)
 	}
 	if attachments.ThreadID != "t1" || len(attachments.Attachments) != 1 {
@@ -158,17 +136,14 @@ func TestGmailThreadGetAndAttachments_JSON(t *testing.T) {
 		t.Fatalf("unexpected attachment filename: %#v", attachments.Attachments[0])
 	}
 
-	attachmentsDownloadOut := captureStdout(t, func() {
-		_ = captureStderr(t, func() {
-			if err := Execute([]string{"--json", "--account", "a@b.com", "gmail", "thread", "attachments", "t1", "--download", "--out-dir", outDir}); err != nil {
-				t.Fatalf("Execute attachments download: %v", err)
-			}
-		})
-	})
+	attachmentsDownloadResult := executeWithGmailTestService(t, []string{"--json", "--account", "a@b.com", "gmail", "thread", "attachments", "t1", "--download", "--out-dir", outDir}, svc)
+	if attachmentsDownloadResult.err != nil {
+		t.Fatalf("Execute attachments download: %v\nstderr=%q", attachmentsDownloadResult.err, attachmentsDownloadResult.stderr)
+	}
 	var attachmentsDownloaded struct {
 		Attachments []map[string]any `json:"attachments"`
 	}
-	if err := json.Unmarshal([]byte(attachmentsDownloadOut), &attachmentsDownloaded); err != nil {
+	if err := json.Unmarshal([]byte(attachmentsDownloadResult.stdout), &attachmentsDownloaded); err != nil {
 		t.Fatalf("decode attachments download: %v", err)
 	}
 	if len(attachmentsDownloaded.Attachments) != 1 {
@@ -179,26 +154,20 @@ func TestGmailThreadGetAndAttachments_JSON(t *testing.T) {
 	}
 
 	plainOutDir := t.TempDir()
-	plainDownloadOut := captureStdout(t, func() {
-		_ = captureStderr(t, func() {
-			if err := Execute([]string{"--account", "a@b.com", "gmail", "thread", "attachments", "t1", "--download", "--out-dir", plainOutDir}); err != nil {
-				t.Fatalf("Execute attachments download plain: %v", err)
-			}
-		})
-	})
-	if !strings.Contains(plainDownloadOut, "Saved") {
-		t.Fatalf("unexpected download output: %q", plainDownloadOut)
+	plainDownloadResult := executeWithGmailTestService(t, []string{"--account", "a@b.com", "gmail", "thread", "attachments", "t1", "--download", "--out-dir", plainOutDir}, svc)
+	if plainDownloadResult.err != nil {
+		t.Fatalf("Execute attachments download plain: %v\nstderr=%q", plainDownloadResult.err, plainDownloadResult.stderr)
+	}
+	if !strings.Contains(plainDownloadResult.stdout, "Saved") {
+		t.Fatalf("unexpected download output: %q", plainDownloadResult.stdout)
 	}
 
-	cachedOut := captureStdout(t, func() {
-		_ = captureStderr(t, func() {
-			if err := Execute([]string{"--account", "a@b.com", "gmail", "thread", "attachments", "t1", "--download", "--out-dir", plainOutDir}); err != nil {
-				t.Fatalf("Execute attachments cached: %v", err)
-			}
-		})
-	})
-	if !strings.Contains(cachedOut, "Cached") {
-		t.Fatalf("unexpected cached output: %q", cachedOut)
+	cachedResult := executeWithGmailTestService(t, []string{"--account", "a@b.com", "gmail", "thread", "attachments", "t1", "--download", "--out-dir", plainOutDir}, svc)
+	if cachedResult.err != nil {
+		t.Fatalf("Execute attachments cached: %v\nstderr=%q", cachedResult.err, cachedResult.stderr)
+	}
+	if !strings.Contains(cachedResult.stdout, "Cached") {
+		t.Fatalf("unexpected cached output: %q", cachedResult.stdout)
 	}
 
 	// Ensure path is within the requested output dir when downloading attachments.
@@ -206,62 +175,49 @@ func TestGmailThreadGetAndAttachments_JSON(t *testing.T) {
 		t.Fatalf("unexpected download path: %s", path)
 	}
 
-	plainOut := captureStdout(t, func() {
-		_ = captureStderr(t, func() {
-			if err := Execute([]string{"--account", "a@b.com", "gmail", "thread", "get", "t1"}); err != nil {
-				t.Fatalf("Execute thread get plain: %v", err)
-			}
-		})
-	})
-	if !strings.Contains(plainOut, "Thread contains") {
-		t.Fatalf("unexpected plain output: %q", plainOut)
+	plainResult := executeWithGmailTestService(t, []string{"--account", "a@b.com", "gmail", "thread", "get", "t1"}, svc)
+	if plainResult.err != nil {
+		t.Fatalf("Execute thread get plain: %v\nstderr=%q", plainResult.err, plainResult.stderr)
+	}
+	if !strings.Contains(plainResult.stdout, "Thread contains") {
+		t.Fatalf("unexpected plain output: %q", plainResult.stdout)
 	}
 
-	emptyErr := captureStderr(t, func() {
-		if err := Execute([]string{"--account", "a@b.com", "gmail", "thread", "get", "empty"}); err != nil {
-			t.Fatalf("Execute empty thread: %v", err)
-		}
-	})
-	if !strings.Contains(emptyErr, "Empty thread") {
-		t.Fatalf("unexpected empty thread stderr: %q", emptyErr)
+	emptyResult := executeWithGmailTestService(t, []string{"--account", "a@b.com", "gmail", "thread", "get", "empty"}, svc)
+	if emptyResult.err != nil {
+		t.Fatalf("Execute empty thread: %v\nstderr=%q", emptyResult.err, emptyResult.stderr)
+	}
+	if !strings.Contains(emptyResult.stderr, "Empty thread") {
+		t.Fatalf("unexpected empty thread stderr: %q", emptyResult.stderr)
 	}
 
-	noAttsOut := captureStdout(t, func() {
-		_ = captureStderr(t, func() {
-			if err := Execute([]string{"--account", "a@b.com", "gmail", "thread", "attachments", "noatts"}); err != nil {
-				t.Fatalf("Execute no attachments: %v", err)
-			}
-		})
-	})
-	if !strings.Contains(noAttsOut, "No attachments found") {
-		t.Fatalf("unexpected no attachments output: %q", noAttsOut)
+	noAttsResult := executeWithGmailTestService(t, []string{"--account", "a@b.com", "gmail", "thread", "attachments", "noatts"}, svc)
+	if noAttsResult.err != nil {
+		t.Fatalf("Execute no attachments: %v\nstderr=%q", noAttsResult.err, noAttsResult.stderr)
+	}
+	if !strings.Contains(noAttsResult.stdout, "No attachments found") {
+		t.Fatalf("unexpected no attachments output: %q", noAttsResult.stdout)
 	}
 
-	emptyAttachOut := captureStdout(t, func() {
-		_ = captureStderr(t, func() {
-			if err := Execute([]string{"--json", "--account", "a@b.com", "gmail", "thread", "attachments", "empty"}); err != nil {
-				t.Fatalf("Execute empty attachments json: %v", err)
-			}
-		})
-	})
-	if !strings.Contains(emptyAttachOut, "\"attachments\"") {
-		t.Fatalf("unexpected empty attachments output: %q", emptyAttachOut)
+	emptyAttachResult := executeWithGmailTestService(t, []string{"--json", "--account", "a@b.com", "gmail", "thread", "attachments", "empty"}, svc)
+	if emptyAttachResult.err != nil {
+		t.Fatalf("Execute empty attachments json: %v\nstderr=%q", emptyAttachResult.err, emptyAttachResult.stderr)
+	}
+	if !strings.Contains(emptyAttachResult.stdout, "\"attachments\"") {
+		t.Fatalf("unexpected empty attachments output: %q", emptyAttachResult.stdout)
 	}
 
-	noAttsJSONOut := captureStdout(t, func() {
-		_ = captureStderr(t, func() {
-			if err := Execute([]string{"--json", "--account", "a@b.com", "gmail", "thread", "attachments", "noatts"}); err != nil {
-				t.Fatalf("Execute no attachments json: %v", err)
-			}
-		})
-	})
+	noAttsJSONResult := executeWithGmailTestService(t, []string{"--json", "--account", "a@b.com", "gmail", "thread", "attachments", "noatts"}, svc)
+	if noAttsJSONResult.err != nil {
+		t.Fatalf("Execute no attachments json: %v\nstderr=%q", noAttsJSONResult.err, noAttsJSONResult.stderr)
+	}
 	var noAttsJSON struct {
 		Attachments []map[string]any `json:"attachments"`
 	}
-	if err := json.Unmarshal([]byte(noAttsJSONOut), &noAttsJSON); err != nil {
+	if err := json.Unmarshal([]byte(noAttsJSONResult.stdout), &noAttsJSON); err != nil {
 		t.Fatalf("decode no attachments json: %v", err)
 	}
 	if noAttsJSON.Attachments == nil {
-		t.Fatalf("attachments is nil in output: %s", noAttsJSONOut)
+		t.Fatalf("attachments is nil in output: %s", noAttsJSONResult.stdout)
 	}
 }
