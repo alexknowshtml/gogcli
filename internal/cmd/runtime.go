@@ -260,9 +260,9 @@ func photosPickerService(ctx context.Context, account string) (*googleapi.Photos
 
 func openURL(ctx context.Context, uri string) error {
 	if runtime, ok := app.FromContext(ctx); ok && runtime.Services.OpenURL != nil {
-		return runtime.Services.OpenURL(uri)
+		return runtime.Services.OpenURL(ctx, uri)
 	}
-	return openPhotosPickerBrowser(uri)
+	return openPhotosPickerBrowser(ctx, uri)
 }
 
 func driveService(ctx context.Context, account string) (*drive.Service, error) {

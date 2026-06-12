@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -44,40 +45,63 @@ func TestPhotosSearchBuildsReadOnlyRequest(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	orig := newPhotosClient
-	t.Cleanup(func() { newPhotosClient = orig })
-	newPhotosClient = func(context.Context, string) (*googleapi.PhotosClient, error) {
-		return googleapi.NewPhotosClient(srv.Client(), googleapi.WithPhotosBaseURL(srv.URL)), nil
-	}
+	client := googleapi.NewPhotosClient(srv.Client(), googleapi.WithPhotosBaseURL(srv.URL))
 
-	out := captureStdout(t, func() {
-		cmd := &PhotosSearchCmd{MediaType: "PHOTO", Max: 10, From: "2026-01-01", To: "2026-01-02"}
-		if err := cmd.Run(newCmdJSONContext(t), &RootFlags{Account: "a@example.com"}); err != nil {
-			t.Fatalf("Run: %v", err)
-		}
-	})
+	result := executeWithPhotosTestServices(t, []string{
+		"--json", "--account", "a@example.com", "photos", "search",
+		"--media-type", "PHOTO", "--max", "10", "--from", "2026-01-01", "--to", "2026-01-02",
+	}, photosTestServices{Photos: fixedPhotosTestService(client)})
+	if result.err != nil {
+		t.Fatalf("Run: %v\nstderr=%q", result.err, result.stderr)
+	}
 	var parsed struct {
 		MediaItemCount int `json:"mediaItemCount"`
 		MediaItems     []struct {
 			ID string `json:"id"`
 		} `json:"mediaItems"`
 	}
-	if err := json.Unmarshal([]byte(out), &parsed); err != nil {
-		t.Fatalf("json parse: %v\n%s", err, out)
+	if err := json.Unmarshal([]byte(result.stdout), &parsed); err != nil {
+		t.Fatalf("json parse: %v\n%s", err, result.stdout)
 	}
 	if parsed.MediaItemCount != 1 || len(parsed.MediaItems) != 1 || parsed.MediaItems[0].ID != "m1" {
 		t.Fatalf("unexpected output: %#v", parsed)
 	}
 }
 
-func TestPhotosValidationFailsBeforeClient(t *testing.T) {
-	orig := newPhotosClient
-	t.Cleanup(func() { newPhotosClient = orig })
-	newPhotosClient = func(context.Context, string) (*googleapi.PhotosClient, error) {
-		t.Fatalf("expected local validation to fail before creating Photos client")
-		return nil, context.Canceled
-	}
+func TestPhotosDownloadStreamsToRuntimeOutput(t *testing.T) {
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/mediaItems/m1":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"id":       "m1",
+				"filename": "photo.jpg",
+				"baseUrl":  srv.URL + "/media/photo",
+			})
+		case "/media/photo=d":
+			_, _ = io.WriteString(w, "photo-bytes")
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
 
+	client := googleapi.NewPhotosClient(srv.Client(), googleapi.WithPhotosBaseURL(srv.URL))
+	result := runWithPhotosTestServices(t, photosTestServices{
+		Photos: fixedPhotosTestService(client),
+	}, func(ctx context.Context) error {
+		return (&PhotosDownloadCmd{MediaItemID: "m1", Out: "-"}).Run(ctx, &RootFlags{Account: "a@example.com"})
+	})
+	if result.err != nil {
+		t.Fatalf("Run: %v\nstderr=%q", result.err, result.stderr)
+	}
+	if result.stdout != "photo-bytes" {
+		t.Fatalf("stdout = %q, want photo bytes", result.stdout)
+	}
+}
+
+func TestPhotosValidationFailsBeforeClient(t *testing.T) {
 	testCases := []struct {
 		name string
 		args []string
@@ -96,12 +120,12 @@ func TestPhotosValidationFailsBeforeClient(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			_ = captureStderr(t, func() {
-				err := Execute(tc.args)
-				if err == nil || ExitCode(err) != 2 || !strings.Contains(err.Error(), tc.want) {
-					t.Fatalf("unexpected err: %v", err)
-				}
+			result := executeWithPhotosTestServices(t, tc.args, photosTestServices{
+				Photos: unexpectedPhotosTestService(t, "expected local validation to fail before creating Photos client"),
 			})
+			if result.err == nil || ExitCode(result.err) != 2 || !strings.Contains(result.err.Error(), tc.want) {
+				t.Fatalf("unexpected err: %v", result.err)
+			}
 		})
 	}
 }

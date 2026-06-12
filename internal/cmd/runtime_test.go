@@ -202,7 +202,7 @@ func TestOpenURLUsesRuntimeOperation(t *testing.T) {
 
 	var gotURI string
 	runtime := &app.Runtime{Services: app.Services{
-		OpenURL: func(uri string) error {
+		OpenURL: func(_ context.Context, uri string) error {
 			gotURI = uri
 			return nil
 		},

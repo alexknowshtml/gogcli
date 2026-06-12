@@ -55,7 +55,7 @@ type (
 	ZoomMeetingClientFactory     func(string) (ZoomMeetingClient, error)
 	DriveDownloadFunc            func(context.Context, *drive.Service, string) (*http.Response, error)
 	DriveExportFunc              func(context.Context, *drive.Service, string, string) (*http.Response, error)
-	OpenURLFunc                  func(string) error
+	OpenURLFunc                  func(context.Context, string) error
 )
 
 type ZoomMeetingClient interface {

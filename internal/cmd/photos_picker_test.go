@@ -79,69 +79,81 @@ func TestPhotosPickerCommandWorkflow(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	originalClient := newPhotosPickerClient
-	originalOpen := openPhotosPickerBrowser
-	t.Cleanup(func() {
-		newPhotosPickerClient = originalClient
-		openPhotosPickerBrowser = originalOpen
-	})
-	newPhotosPickerClient = func(context.Context, string) (*googleapi.PhotosPickerClient, error) {
-		return googleapi.NewPhotosPickerClient(srv.Client(), googleapi.WithPhotosPickerBaseURL(srv.URL)), nil
-	}
+	client := googleapi.NewPhotosPickerClient(srv.Client(), googleapi.WithPhotosPickerBaseURL(srv.URL))
 	openedURI := ""
-	openPhotosPickerBrowser = func(uri string) error {
-		openedURI = uri
-		return nil
+	services := photosTestServices{
+		PhotosPicker: fixedPhotosPickerTestService(client),
+		OpenURL: func(_ context.Context, uri string) error {
+			openedURI = uri
+			return nil
+		},
 	}
-	ctx := newCmdJSONContext(t)
 	flags := &RootFlags{Account: "a@example.com"}
 
-	createOut := captureStdout(t, func() {
+	createResult := runWithPhotosTestServices(t, services, func(ctx context.Context) error {
 		cmd := &PhotosPickerCreateCmd{MaxItems: 2, Open: true}
-		if err := cmd.Run(ctx, flags); err != nil {
-			t.Fatalf("create: %v", err)
-		}
+		return cmd.Run(ctx, flags)
 	})
-	if !strings.Contains(createOut, `"id": "session-1"`) {
-		t.Fatalf("create output = %s", createOut)
+	if createResult.err != nil {
+		t.Fatalf("create: %v\nstderr=%q", createResult.err, createResult.stderr)
+	}
+	if !strings.Contains(createResult.stdout, `"id": "session-1"`) {
+		t.Fatalf("create output = %s", createResult.stdout)
 	}
 	if openedURI != "https://photos.google.com/picker/session-1" {
 		t.Fatalf("opened URI = %q", openedURI)
 	}
 
-	waitOut := captureStdout(t, func() {
+	waitResult := runWithPhotosTestServices(t, services, func(ctx context.Context) error {
 		cmd := &PhotosPickerWaitCmd{SessionID: "session-1", Timeout: time.Second}
-		if err := cmd.Run(ctx, flags); err != nil {
-			t.Fatalf("wait: %v", err)
-		}
+		return cmd.Run(ctx, flags)
 	})
-	if !strings.Contains(waitOut, `"mediaItemsSet": true`) {
-		t.Fatalf("wait output = %s", waitOut)
+	if waitResult.err != nil {
+		t.Fatalf("wait: %v\nstderr=%q", waitResult.err, waitResult.stderr)
+	}
+	if !strings.Contains(waitResult.stdout, `"mediaItemsSet": true`) {
+		t.Fatalf("wait output = %s", waitResult.stdout)
 	}
 
-	listOut := captureStdout(t, func() {
+	listResult := runWithPhotosTestServices(t, services, func(ctx context.Context) error {
 		cmd := &PhotosPickerListCmd{SessionID: "session-1", Max: 50}
-		if err := cmd.Run(ctx, flags); err != nil {
-			t.Fatalf("list: %v", err)
-		}
+		return cmd.Run(ctx, flags)
 	})
-	if !strings.Contains(listOut, `"id": "photo-1"`) {
-		t.Fatalf("list output = %s", listOut)
+	if listResult.err != nil {
+		t.Fatalf("list: %v\nstderr=%q", listResult.err, listResult.stderr)
+	}
+	if !strings.Contains(listResult.stdout, `"id": "photo-1"`) {
+		t.Fatalf("list output = %s", listResult.stdout)
+	}
+
+	stdoutDownload := runWithPhotosTestServices(t, services, func(ctx context.Context) error {
+		return (&PhotosPickerDownloadCmd{
+			SessionID:   "session-1",
+			MediaItemID: "photo-1",
+			Out:         "-",
+		}).Run(ctx, flags)
+	})
+	if stdoutDownload.err != nil {
+		t.Fatalf("stdout download: %v\nstderr=%q", stdoutDownload.err, stdoutDownload.stderr)
+	}
+	if stdoutDownload.stdout != "picked-photo" {
+		t.Fatalf("stdout download = %q", stdoutDownload.stdout)
 	}
 
 	outputPath := filepath.Join(t.TempDir(), "picked.jpg")
-	downloadOut := captureStdout(t, func() {
+	downloadResult := runWithPhotosTestServices(t, services, func(ctx context.Context) error {
 		cmd := &PhotosPickerDownloadCmd{
 			SessionID:   "session-1",
 			MediaItemID: "photo-1",
 			Out:         outputPath,
 		}
-		if err := cmd.Run(ctx, flags); err != nil {
-			t.Fatalf("download: %v", err)
-		}
+		return cmd.Run(ctx, flags)
 	})
-	if !strings.Contains(downloadOut, `"bytes": 12`) {
-		t.Fatalf("download output = %s", downloadOut)
+	if downloadResult.err != nil {
+		t.Fatalf("download: %v\nstderr=%q", downloadResult.err, downloadResult.stderr)
+	}
+	if !strings.Contains(downloadResult.stdout, `"bytes": 12`) {
+		t.Fatalf("download output = %s", downloadResult.stdout)
 	}
 	downloaded, err := os.ReadFile(outputPath)
 	if err != nil {
@@ -151,14 +163,15 @@ func TestPhotosPickerCommandWorkflow(t *testing.T) {
 		t.Fatalf("downloaded = %q", downloaded)
 	}
 
-	deleteOut := captureStdout(t, func() {
+	deleteResult := runWithPhotosTestServices(t, services, func(ctx context.Context) error {
 		cmd := &PhotosPickerDeleteCmd{SessionID: "session-1"}
-		if err := cmd.Run(ctx, flags); err != nil {
-			t.Fatalf("delete: %v", err)
-		}
+		return cmd.Run(ctx, flags)
 	})
-	if !strings.Contains(deleteOut, `"deleted": true`) {
-		t.Fatalf("delete output = %s", deleteOut)
+	if deleteResult.err != nil {
+		t.Fatalf("delete: %v\nstderr=%q", deleteResult.err, deleteResult.stderr)
+	}
+	if !strings.Contains(deleteResult.stdout, `"deleted": true`) {
+		t.Fatalf("delete output = %s", deleteResult.stdout)
 	}
 }
 
@@ -237,27 +250,20 @@ func TestPhotosPickerListRejectsRepeatedPageToken(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	originalClient := newPhotosPickerClient
-	t.Cleanup(func() { newPhotosPickerClient = originalClient })
-	newPhotosPickerClient = func(context.Context, string) (*googleapi.PhotosPickerClient, error) {
-		return googleapi.NewPhotosPickerClient(srv.Client(), googleapi.WithPhotosPickerBaseURL(srv.URL)), nil
-	}
+	client := googleapi.NewPhotosPickerClient(srv.Client(), googleapi.WithPhotosPickerBaseURL(srv.URL))
 
 	cmd := &PhotosPickerListCmd{SessionID: "session-1", Max: 50, All: true}
-	err := cmd.Run(newCmdJSONContext(t), &RootFlags{Account: "a@example.com"})
-	if err == nil || !strings.Contains(err.Error(), "repeated page token") {
-		t.Fatalf("err = %v", err)
+	result := runWithPhotosTestServices(t, photosTestServices{
+		PhotosPicker: fixedPhotosPickerTestService(client),
+	}, func(ctx context.Context) error {
+		return cmd.Run(ctx, &RootFlags{Account: "a@example.com"})
+	})
+	if result.err == nil || !strings.Contains(result.err.Error(), "repeated page token") {
+		t.Fatalf("err = %v", result.err)
 	}
 }
 
 func TestPhotosPickerValidationFailsBeforeClient(t *testing.T) {
-	originalClient := newPhotosPickerClient
-	t.Cleanup(func() { newPhotosPickerClient = originalClient })
-	newPhotosPickerClient = func(context.Context, string) (*googleapi.PhotosPickerClient, error) {
-		t.Fatalf("expected validation before creating Picker client")
-		return nil, context.Canceled
-	}
-
 	testCases := []struct {
 		name string
 		args []string
@@ -273,32 +279,28 @@ func TestPhotosPickerValidationFailsBeforeClient(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			_ = captureStderr(t, func() {
-				err := Execute(tc.args)
-				if err == nil || ExitCode(err) != 2 || !strings.Contains(err.Error(), tc.want) {
-					t.Fatalf("err = %v", err)
-				}
+			result := executeWithPhotosTestServices(t, tc.args, photosTestServices{
+				PhotosPicker: unexpectedPhotosPickerTestService(t, "expected validation before creating Picker client"),
 			})
+			if result.err == nil || ExitCode(result.err) != 2 || !strings.Contains(result.err.Error(), tc.want) {
+				t.Fatalf("err = %v", result.err)
+			}
 		})
 	}
 }
 
 func TestPhotosPickerCreateDryRunSkipsAuth(t *testing.T) {
-	originalClient := newPhotosPickerClient
-	t.Cleanup(func() { newPhotosPickerClient = originalClient })
-	newPhotosPickerClient = func(context.Context, string) (*googleapi.PhotosPickerClient, error) {
-		t.Fatalf("dry-run should not create Picker client")
-		return nil, context.Canceled
-	}
-
-	output := captureStdout(t, func() {
+	result := runWithPhotosTestServices(t, photosTestServices{
+		PhotosPicker: unexpectedPhotosPickerTestService(t, "dry-run should not create Picker client"),
+	}, func(ctx context.Context) error {
 		cmd := &PhotosPickerCreateCmd{MaxItems: 4, Open: true}
-		if err := cmd.Run(newCmdJSONContext(t), &RootFlags{DryRun: true}); ExitCode(err) != 0 {
-			t.Fatalf("dry-run: %v", err)
-		}
+		return cmd.Run(ctx, &RootFlags{DryRun: true})
 	})
-	if !strings.Contains(output, `"op": "photos.picker.sessions.create"`) ||
-		!strings.Contains(output, `"max_items": 4`) {
-		t.Fatalf("output = %s", output)
+	if ExitCode(result.err) != 0 {
+		t.Fatalf("dry-run: %v", result.err)
+	}
+	if !strings.Contains(result.stdout, `"op": "photos.picker.sessions.create"`) ||
+		!strings.Contains(result.stdout, `"max_items": 4`) {
+		t.Fatalf("output = %s", result.stdout)
 	}
 }

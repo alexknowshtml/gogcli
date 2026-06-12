@@ -16,7 +16,7 @@ import (
 	"github.com/steipete/gogcli/internal/ui"
 )
 
-var newPhotosClient = func(ctx context.Context, email string) (*googleapi.PhotosClient, error) {
+func newPhotosClient(ctx context.Context, email string) (*googleapi.PhotosClient, error) {
 	return googleapi.NewPhotosClientForAccount(ctx, email, googleapi.WithPhotosBaseURL(os.Getenv("GOG_PHOTOS_BASE_URL")))
 }
 
