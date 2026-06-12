@@ -13,14 +13,14 @@ import (
 
 func TestBuildQuestion(t *testing.T) {
 	t.Run("choice question requires options", func(t *testing.T) {
-		_, err := buildQuestion("radio", &FormsAddQuestionCmd{})
+		_, err := buildQuestion("radio", &formsAddQuestionInput{})
 		if err == nil || !strings.Contains(err.Error(), "--option is required") {
 			t.Fatalf("expected option validation error, got %v", err)
 		}
 	})
 
 	t.Run("scale question", func(t *testing.T) {
-		q, err := buildQuestion("scale", &FormsAddQuestionCmd{Required: true, ScaleLow: 1, ScaleHigh: 7, ScaleLowLabel: "low", ScaleHighLabel: "high"})
+		q, err := buildQuestion("scale", &formsAddQuestionInput{Required: true, ScaleLow: 1, ScaleHigh: 7, ScaleLowLabel: "low", ScaleHighLabel: "high"})
 		if err != nil {
 			t.Fatalf("buildQuestion: %v", err)
 		}
@@ -33,7 +33,7 @@ func TestBuildQuestion(t *testing.T) {
 	})
 
 	t.Run("quiz grading", func(t *testing.T) {
-		q, err := buildQuestion("radio", &FormsAddQuestionCmd{
+		q, err := buildQuestion("radio", &formsAddQuestionInput{
 			Options: []string{"1", "2", "4"},
 			Correct: []string{
 				"4",
@@ -52,7 +52,7 @@ func TestBuildQuestion(t *testing.T) {
 	})
 
 	t.Run("quiz grading validation", func(t *testing.T) {
-		_, err := buildQuestion("radio", &FormsAddQuestionCmd{
+		_, err := buildQuestion("radio", &formsAddQuestionInput{
 			Options: []string{"1", "2"},
 			Correct: []string{
 				"2",
@@ -62,7 +62,7 @@ func TestBuildQuestion(t *testing.T) {
 			t.Fatalf("expected points validation, got %v", err)
 		}
 
-		_, err = buildQuestion("scale", &FormsAddQuestionCmd{Correct: []string{"5"}, Points: 1})
+		_, err = buildQuestion("scale", &formsAddQuestionInput{Correct: []string{"5"}, Points: 1})
 		if err == nil || !strings.Contains(err.Error(), "supported only") {
 			t.Fatalf("expected type validation, got %v", err)
 		}
