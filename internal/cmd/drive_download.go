@@ -136,10 +136,10 @@ func downloadDriveFile(ctx context.Context, svc *drive.Service, meta *drive.File
 		} else {
 			outPath = replaceExt(destPath, driveExportExtension(exportMimeType))
 		}
-		resp, err = driveExportDownload(ctx, svc, meta.Id, exportMimeType)
+		resp, err = driveExportRequest(ctx, svc, meta.Id, exportMimeType)
 	} else {
 		outPath = destPath
-		resp, err = driveDownload(ctx, svc, meta.Id)
+		resp, err = driveDownloadRequest(ctx, svc, meta.Id)
 	}
 	if err != nil {
 		return "", 0, err

@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -80,6 +82,45 @@ func TestDriveServiceUsesRuntimeFactory(t *testing.T) {
 	}
 	if gotAccount != "test@example.com" {
 		t.Fatalf("factory account = %q, want test@example.com", gotAccount)
+	}
+}
+
+func TestDriveDownloadOperationsUseRuntimeServices(t *testing.T) {
+	t.Parallel()
+
+	svc := &drive.Service{}
+	downloadResponse := &http.Response{Body: io.NopCloser(strings.NewReader(""))}
+	exportResponse := &http.Response{Body: io.NopCloser(strings.NewReader(""))}
+	var gotDownloadID string
+	var gotExportID string
+	var gotExportMIME string
+	ctx := app.WithRuntime(context.Background(), &app.Runtime{Services: app.Services{
+		DriveDownload: func(_ context.Context, gotSvc *drive.Service, fileID string) (*http.Response, error) {
+			if gotSvc != svc {
+				t.Fatalf("download service = %p, want %p", gotSvc, svc)
+			}
+			gotDownloadID = fileID
+			return downloadResponse, nil
+		},
+		DriveExport: func(_ context.Context, gotSvc *drive.Service, fileID, mimeType string) (*http.Response, error) {
+			if gotSvc != svc {
+				t.Fatalf("export service = %p, want %p", gotSvc, svc)
+			}
+			gotExportID = fileID
+			gotExportMIME = mimeType
+			return exportResponse, nil
+		},
+	}})
+
+	gotDownload, err := driveDownloadRequest(ctx, svc, "download-id")
+	t.Cleanup(func() { _ = gotDownload.Body.Close() })
+	if err != nil || gotDownload != downloadResponse || gotDownloadID != "download-id" {
+		t.Fatalf("driveDownloadRequest() = (%p, %v, %q)", gotDownload, err, gotDownloadID)
+	}
+	gotExport, err := driveExportRequest(ctx, svc, "export-id", "application/pdf")
+	t.Cleanup(func() { _ = gotExport.Body.Close() })
+	if err != nil || gotExport != exportResponse || gotExportID != "export-id" || gotExportMIME != "application/pdf" {
+		t.Fatalf("driveExportRequest() = (%p, %v, %q, %q)", gotExport, err, gotExportID, gotExportMIME)
 	}
 }
 

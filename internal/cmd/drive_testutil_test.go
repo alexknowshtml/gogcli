@@ -49,6 +49,21 @@ func executeWithDriveTestServiceFactory(t *testing.T, args []string, factory app
 	return executeWithTestRuntime(t, args, &app.Runtime{Services: app.Services{Drive: factory}})
 }
 
+func executeWithDriveTestOperations(
+	t *testing.T,
+	args []string,
+	svc *drive.Service,
+	download app.DriveDownloadFunc,
+	export app.DriveExportFunc,
+) executeTestResult {
+	t.Helper()
+	return executeWithTestRuntime(t, args, &app.Runtime{Services: app.Services{
+		Drive:         stubDriveService(svc),
+		DriveDownload: download,
+		DriveExport:   export,
+	}})
+}
+
 func newDriveMetadataTestService(t *testing.T, mimeType string) (*drive.Service, func()) {
 	t.Helper()
 

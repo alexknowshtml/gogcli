@@ -9,9 +9,6 @@ import (
 
 func TestExecute_DriveDelete_DefaultAndPermanent(t *testing.T) {
 	t.Run("default_trash", func(t *testing.T) {
-		origNew := newDriveService
-		t.Cleanup(func() { newDriveService = origNew })
-
 		var patchCount int
 		svc, closeSrv := newDriveTestService(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if !strings.Contains(r.URL.Path, "/files/id1") || (r.Method != http.MethodPatch && r.Method != http.MethodPut) {
@@ -33,33 +30,25 @@ func TestExecute_DriveDelete_DefaultAndPermanent(t *testing.T) {
 		}))
 		defer closeSrv()
 
-		newDriveService = stubDriveService(svc)
-
-		out := captureStdout(t, func() {
-			_ = captureStderr(t, func() {
-				if execErr := Execute([]string{"--force", "--account", "a@b.com", "drive", "delete", "id1"}); execErr != nil {
-					t.Fatalf("Execute: %v", execErr)
-				}
-			})
-		})
-		if !strings.Contains(out, "trashed\ttrue") || !strings.Contains(out, "deleted\tfalse") {
-			t.Fatalf("unexpected text output: %q", out)
+		result := executeWithDriveTestService(t, []string{"--force", "--account", "a@b.com", "drive", "delete", "id1"}, svc)
+		if result.err != nil {
+			t.Fatalf("Execute: %v", result.err)
+		}
+		if !strings.Contains(result.stdout, "trashed\ttrue") || !strings.Contains(result.stdout, "deleted\tfalse") {
+			t.Fatalf("unexpected text output: %q", result.stdout)
 		}
 
-		jsonOut := captureStdout(t, func() {
-			_ = captureStderr(t, func() {
-				if execErr := Execute([]string{"--json", "--force", "--account", "a@b.com", "drive", "delete", "id1"}); execErr != nil {
-					t.Fatalf("Execute: %v", execErr)
-				}
-			})
-		})
+		jsonResult := executeWithDriveTestService(t, []string{"--json", "--force", "--account", "a@b.com", "drive", "delete", "id1"}, svc)
+		if jsonResult.err != nil {
+			t.Fatalf("Execute: %v", jsonResult.err)
+		}
 		var parsed struct {
 			Trashed bool   `json:"trashed"`
 			Deleted bool   `json:"deleted"`
 			ID      string `json:"id"`
 		}
-		if err := json.Unmarshal([]byte(jsonOut), &parsed); err != nil {
-			t.Fatalf("json parse: %v\nout=%q", err, jsonOut)
+		if err := json.Unmarshal([]byte(jsonResult.stdout), &parsed); err != nil {
+			t.Fatalf("json parse: %v\nout=%q", err, jsonResult.stdout)
 		}
 		if !parsed.Trashed || parsed.Deleted || parsed.ID != "id1" {
 			t.Fatalf("unexpected json output: %#v", parsed)
@@ -71,9 +60,6 @@ func TestExecute_DriveDelete_DefaultAndPermanent(t *testing.T) {
 	})
 
 	t.Run("permanent_delete", func(t *testing.T) {
-		origNew := newDriveService
-		t.Cleanup(func() { newDriveService = origNew })
-
 		var deleteCount int
 		svc, closeSrv := newDriveTestService(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if !strings.Contains(r.URL.Path, "/files/id1") || r.Method != http.MethodDelete {
@@ -86,33 +72,25 @@ func TestExecute_DriveDelete_DefaultAndPermanent(t *testing.T) {
 		}))
 		defer closeSrv()
 
-		newDriveService = stubDriveService(svc)
-
-		out := captureStdout(t, func() {
-			_ = captureStderr(t, func() {
-				if execErr := Execute([]string{"--force", "--account", "a@b.com", "drive", "delete", "id1", "--permanent"}); execErr != nil {
-					t.Fatalf("Execute: %v", execErr)
-				}
-			})
-		})
-		if !strings.Contains(out, "trashed\tfalse") || !strings.Contains(out, "deleted\ttrue") {
-			t.Fatalf("unexpected text output: %q", out)
+		result := executeWithDriveTestService(t, []string{"--force", "--account", "a@b.com", "drive", "delete", "id1", "--permanent"}, svc)
+		if result.err != nil {
+			t.Fatalf("Execute: %v", result.err)
+		}
+		if !strings.Contains(result.stdout, "trashed\tfalse") || !strings.Contains(result.stdout, "deleted\ttrue") {
+			t.Fatalf("unexpected text output: %q", result.stdout)
 		}
 
-		jsonOut := captureStdout(t, func() {
-			_ = captureStderr(t, func() {
-				if execErr := Execute([]string{"--json", "--force", "--account", "a@b.com", "drive", "delete", "id1", "--permanent"}); execErr != nil {
-					t.Fatalf("Execute: %v", execErr)
-				}
-			})
-		})
+		jsonResult := executeWithDriveTestService(t, []string{"--json", "--force", "--account", "a@b.com", "drive", "delete", "id1", "--permanent"}, svc)
+		if jsonResult.err != nil {
+			t.Fatalf("Execute: %v", jsonResult.err)
+		}
 		var parsed struct {
 			Trashed bool   `json:"trashed"`
 			Deleted bool   `json:"deleted"`
 			ID      string `json:"id"`
 		}
-		if err := json.Unmarshal([]byte(jsonOut), &parsed); err != nil {
-			t.Fatalf("json parse: %v\nout=%q", err, jsonOut)
+		if err := json.Unmarshal([]byte(jsonResult.stdout), &parsed); err != nil {
+			t.Fatalf("json parse: %v\nout=%q", err, jsonResult.stdout)
 		}
 		if parsed.Trashed || !parsed.Deleted || parsed.ID != "id1" {
 			t.Fatalf("unexpected json output: %#v", parsed)

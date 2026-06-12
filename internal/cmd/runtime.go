@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"io"
+	"net/http"
 	"os"
 
 	"google.golang.org/api/drive/v3"
@@ -22,7 +23,9 @@ func newDefaultRuntime() *app.Runtime {
 			Err: os.Stderr,
 		},
 		Services: app.Services{
-			Drive: newDriveService,
+			Drive:         newDriveService,
+			DriveDownload: driveDownload,
+			DriveExport:   driveExportDownload,
 		},
 	}
 }
@@ -44,6 +47,12 @@ func normalizedRuntime(runtime *app.Runtime) *app.Runtime {
 	}
 	if normalized.Services.Drive == nil {
 		normalized.Services.Drive = defaults.Services.Drive
+	}
+	if normalized.Services.DriveDownload == nil {
+		normalized.Services.DriveDownload = defaults.Services.DriveDownload
+	}
+	if normalized.Services.DriveExport == nil {
+		normalized.Services.DriveExport = defaults.Services.DriveExport
 	}
 	return &normalized
 }
@@ -73,4 +82,18 @@ func driveService(ctx context.Context, account string) (*drive.Service, error) {
 		return runtime.Services.Drive(ctx, account)
 	}
 	return newDriveService(ctx, account)
+}
+
+func driveDownloadRequest(ctx context.Context, svc *drive.Service, fileID string) (*http.Response, error) {
+	if runtime, ok := app.FromContext(ctx); ok && runtime.Services.DriveDownload != nil {
+		return runtime.Services.DriveDownload(ctx, svc, fileID)
+	}
+	return driveDownload(ctx, svc, fileID)
+}
+
+func driveExportRequest(ctx context.Context, svc *drive.Service, fileID, mimeType string) (*http.Response, error) {
+	if runtime, ok := app.FromContext(ctx); ok && runtime.Services.DriveExport != nil {
+		return runtime.Services.DriveExport(ctx, svc, fileID, mimeType)
+	}
+	return driveExportDownload(ctx, svc, fileID, mimeType)
 }

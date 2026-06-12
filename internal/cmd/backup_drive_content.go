@@ -177,7 +177,7 @@ func downloadDriveBackupContent(ctx context.Context, svc *drive.Service, file *d
 		defer cancel()
 	}
 	if plan.Source == "export" {
-		httpResp, err := driveExportDownload(ctx, svc, file.Id, plan.MimeType)
+		httpResp, err := driveExportRequest(ctx, svc, file.Id, plan.MimeType)
 		if err != nil {
 			return nil, err
 		}
@@ -188,7 +188,7 @@ func downloadDriveBackupContent(ctx context.Context, svc *drive.Service, file *d
 		}
 		return io.ReadAll(httpResp.Body)
 	}
-	httpResp, err := driveDownload(ctx, svc, file.Id)
+	httpResp, err := driveDownloadRequest(ctx, svc, file.Id)
 	if err != nil {
 		return nil, err
 	}

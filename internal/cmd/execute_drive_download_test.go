@@ -16,13 +16,6 @@ import (
 )
 
 func TestExecute_DriveDownload_WithOutFile_JSON(t *testing.T) {
-	origNew := newDriveService
-	origDownload := driveDownload
-	t.Cleanup(func() {
-		newDriveService = origNew
-		driveDownload = origDownload
-	})
-
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !(strings.Contains(r.URL.Path, "/files/id1") && r.Method == http.MethodGet) {
 			http.NotFound(w, r)
@@ -45,9 +38,8 @@ func TestExecute_DriveDownload_WithOutFile_JSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewService: %v", err)
 	}
-	newDriveService = func(context.Context, string) (*drive.Service, error) { return svc, nil }
 
-	driveDownload = func(context.Context, *drive.Service, string) (*http.Response, error) {
+	download := func(context.Context, *drive.Service, string) (*http.Response, error) {
 		return &http.Response{
 			StatusCode: http.StatusOK,
 			Status:     "200 OK",
@@ -57,25 +49,22 @@ func TestExecute_DriveDownload_WithOutFile_JSON(t *testing.T) {
 
 	outPath := filepath.Join(t.TempDir(), "out.bin")
 
-	stdout := captureStdout(t, func() {
-		_ = captureStderr(t, func() {
-			if execErr := Execute([]string{
-				"--json",
-				"--account", "a@b.com",
-				"drive", "download", "id1",
-				"--out", outPath,
-			}); execErr != nil {
-				t.Fatalf("Execute: %v", execErr)
-			}
-		})
-	})
+	result := executeWithDriveTestOperations(t, []string{
+		"--json",
+		"--account", "a@b.com",
+		"drive", "download", "id1",
+		"--out", outPath,
+	}, svc, download, nil)
+	if result.err != nil {
+		t.Fatalf("Execute: %v", result.err)
+	}
 
 	var parsed struct {
 		Path string `json:"path"`
 		Size int64  `json:"size"`
 	}
-	if unmarshalErr := json.Unmarshal([]byte(stdout), &parsed); unmarshalErr != nil {
-		t.Fatalf("json parse: %v\nout=%q", unmarshalErr, stdout)
+	if unmarshalErr := json.Unmarshal([]byte(result.stdout), &parsed); unmarshalErr != nil {
+		t.Fatalf("json parse: %v\nout=%q", unmarshalErr, result.stdout)
 	}
 	if parsed.Path != outPath || parsed.Size != 3 {
 		t.Fatalf("unexpected: %#v", parsed)
@@ -90,13 +79,6 @@ func TestExecute_DriveDownload_WithOutFile_JSON(t *testing.T) {
 }
 
 func TestExecute_DriveDownload_WithOutDir_JSON(t *testing.T) {
-	origNew := newDriveService
-	origDownload := driveDownload
-	t.Cleanup(func() {
-		newDriveService = origNew
-		driveDownload = origDownload
-	})
-
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !(strings.Contains(r.URL.Path, "/files/id1") && r.Method == http.MethodGet) {
 			http.NotFound(w, r)
@@ -119,9 +101,8 @@ func TestExecute_DriveDownload_WithOutDir_JSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewService: %v", err)
 	}
-	newDriveService = func(context.Context, string) (*drive.Service, error) { return svc, nil }
 
-	driveDownload = func(context.Context, *drive.Service, string) (*http.Response, error) {
+	download := func(context.Context, *drive.Service, string) (*http.Response, error) {
 		return &http.Response{
 			StatusCode: http.StatusOK,
 			Status:     "200 OK",
@@ -132,25 +113,22 @@ func TestExecute_DriveDownload_WithOutDir_JSON(t *testing.T) {
 	outDir := t.TempDir()
 	wantPath := filepath.Join(outDir, "id1_Doc")
 
-	stdout := captureStdout(t, func() {
-		_ = captureStderr(t, func() {
-			if execErr := Execute([]string{
-				"--json",
-				"--account", "a@b.com",
-				"drive", "download", "id1",
-				"--out", outDir,
-			}); execErr != nil {
-				t.Fatalf("Execute: %v", execErr)
-			}
-		})
-	})
+	result := executeWithDriveTestOperations(t, []string{
+		"--json",
+		"--account", "a@b.com",
+		"drive", "download", "id1",
+		"--out", outDir,
+	}, svc, download, nil)
+	if result.err != nil {
+		t.Fatalf("Execute: %v", result.err)
+	}
 
 	var parsed struct {
 		Path string `json:"path"`
 		Size int64  `json:"size"`
 	}
-	if unmarshalErr := json.Unmarshal([]byte(stdout), &parsed); unmarshalErr != nil {
-		t.Fatalf("json parse: %v\nout=%q", unmarshalErr, stdout)
+	if unmarshalErr := json.Unmarshal([]byte(result.stdout), &parsed); unmarshalErr != nil {
+		t.Fatalf("json parse: %v\nout=%q", unmarshalErr, result.stdout)
 	}
 	if parsed.Path != wantPath || parsed.Size != 3 {
 		t.Fatalf("unexpected: %#v", parsed)
@@ -161,13 +139,6 @@ func TestExecute_DriveDownload_WithOutDir_JSON(t *testing.T) {
 }
 
 func TestExecute_DriveDownload_FormatRejected_NonGoogle(t *testing.T) {
-	origNew := newDriveService
-	origDownload := driveDownload
-	t.Cleanup(func() {
-		newDriveService = origNew
-		driveDownload = origDownload
-	})
-
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !(strings.Contains(r.URL.Path, "/files/id1") && r.Method == http.MethodGet) {
 			http.NotFound(w, r)
@@ -190,10 +161,9 @@ func TestExecute_DriveDownload_FormatRejected_NonGoogle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewService: %v", err)
 	}
-	newDriveService = func(context.Context, string) (*drive.Service, error) { return svc, nil }
 
 	called := false
-	driveDownload = func(context.Context, *drive.Service, string) (*http.Response, error) {
+	download := func(context.Context, *drive.Service, string) (*http.Response, error) {
 		called = true
 		return &http.Response{
 			StatusCode: http.StatusOK,
@@ -203,23 +173,20 @@ func TestExecute_DriveDownload_FormatRejected_NonGoogle(t *testing.T) {
 	}
 
 	outPath := filepath.Join(t.TempDir(), "out.pdf")
-	var execErr error
-	_ = captureStderr(t, func() {
-		execErr = Execute([]string{
-			"--account", "a@b.com",
-			"drive", "download", "id1",
-			"--format", "pdf",
-			"--out", outPath,
-		})
-	})
-	if execErr == nil {
+	result := executeWithDriveTestOperations(t, []string{
+		"--account", "a@b.com",
+		"drive", "download", "id1",
+		"--format", "pdf",
+		"--out", outPath,
+	}, svc, download, nil)
+	if result.err == nil {
 		t.Fatalf("expected error")
 	}
-	if !strings.Contains(execErr.Error(), "non-Google Workspace") {
-		t.Fatalf("unexpected error: %v", execErr)
+	if !strings.Contains(result.err.Error(), "non-Google Workspace") {
+		t.Fatalf("unexpected error: %v", result.err)
 	}
-	if got := ExitCode(execErr); got != 2 {
-		t.Fatalf("expected usage exit code 2, got %d (err=%v)", got, execErr)
+	if got := ExitCode(result.err); got != 2 {
+		t.Fatalf("expected usage exit code 2, got %d (err=%v)", got, result.err)
 	}
 	if called {
 		t.Fatalf("download should not be called on format error")

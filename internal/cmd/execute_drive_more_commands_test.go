@@ -1,18 +1,19 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"google.golang.org/api/drive/v3"
 )
 
 func TestExecute_DriveMoreCommands_JSON(t *testing.T) {
-	origNew := newDriveService
-	t.Cleanup(func() { newDriveService = origNew })
-
 	svc, closeSrv := newDriveTestService(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 		switch {
@@ -114,77 +115,48 @@ func TestExecute_DriveMoreCommands_JSON(t *testing.T) {
 	}))
 	defer closeSrv()
 
-	newDriveService = stubDriveService(svc)
-
 	tmpFile := filepath.Join(t.TempDir(), "upload.bin")
 	if err := os.WriteFile(tmpFile, []byte("abc"), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	_ = captureStderr(t, func() {
-		_ = captureStdout(t, func() {
-			if err := Execute([]string{"--json", "--account", "a@b.com", "drive", "search", "hello"}); err != nil {
-				t.Fatalf("search: %v", err)
-			}
-		})
-		_ = captureStdout(t, func() {
-			if err := Execute([]string{"--json", "--account", "a@b.com", "drive", "upload", tmpFile, "--name", "upload.bin", "--parent", "np"}); err != nil {
-				t.Fatalf("upload: %v", err)
-			}
-		})
-		_ = captureStdout(t, func() {
-			if err := Execute([]string{"--json", "--account", "a@b.com", "drive", "mkdir", "Folder", "--parent", "np"}); err != nil {
-				t.Fatalf("mkdir: %v", err)
-			}
-		})
-		_ = captureStdout(t, func() {
-			if err := Execute([]string{"--json", "--account", "a@b.com", "drive", "rename", "id1", "New"}); err != nil {
-				t.Fatalf("rename: %v", err)
-			}
-		})
-		_ = captureStdout(t, func() {
-			if err := Execute([]string{"--json", "--account", "a@b.com", "drive", "move", "id1", "--parent", "np"}); err != nil {
-				t.Fatalf("move: %v", err)
-			}
-		})
-		_ = captureStdout(t, func() {
-			if err := Execute([]string{"--json", "--force", "--account", "a@b.com", "drive", "share", "id1", "--anyone", "--role", "reader"}); err != nil {
-				t.Fatalf("share: %v", err)
-			}
-		})
-		_ = captureStdout(t, func() {
-			if err := Execute([]string{"--json", "--account", "a@b.com", "drive", "permissions", "id1"}); err != nil {
-				t.Fatalf("permissions: %v", err)
-			}
-		})
-		_ = captureStdout(t, func() {
-			if err := Execute([]string{"--json", "--force", "--account", "a@b.com", "drive", "unshare", "id1", "p1"}); err != nil {
-				t.Fatalf("unshare: %v", err)
-			}
-		})
-		_ = captureStdout(t, func() {
-			if err := Execute([]string{"--json", "--force", "--account", "a@b.com", "drive", "delete", "id1"}); err != nil {
-				t.Fatalf("delete: %v", err)
-			}
-		})
-	})
+	for _, tc := range []struct {
+		name string
+		args []string
+	}{
+		{"search", []string{"--json", "--account", "a@b.com", "drive", "search", "hello"}},
+		{"upload", []string{"--json", "--account", "a@b.com", "drive", "upload", tmpFile, "--name", "upload.bin", "--parent", "np"}},
+		{"mkdir", []string{"--json", "--account", "a@b.com", "drive", "mkdir", "Folder", "--parent", "np"}},
+		{"rename", []string{"--json", "--account", "a@b.com", "drive", "rename", "id1", "New"}},
+		{"move", []string{"--json", "--account", "a@b.com", "drive", "move", "id1", "--parent", "np"}},
+		{"share", []string{"--json", "--force", "--account", "a@b.com", "drive", "share", "id1", "--anyone", "--role", "reader"}},
+		{"permissions", []string{"--json", "--account", "a@b.com", "drive", "permissions", "id1"}},
+		{"unshare", []string{"--json", "--force", "--account", "a@b.com", "drive", "unshare", "id1", "p1"}},
+		{"delete", []string{"--json", "--force", "--account", "a@b.com", "drive", "delete", "id1"}},
+	} {
+		result := executeWithDriveTestService(t, tc.args, svc)
+		if result.err != nil {
+			t.Fatalf("%s: %v", tc.name, result.err)
+		}
+	}
 }
 
 func TestDriveShare_ValidationErrors(t *testing.T) {
-	_ = captureStderr(t, func() {
-		if err := Execute([]string{"--account", "a@b.com", "drive", "share", "id1"}); err == nil {
-			t.Fatalf("expected error")
+	for _, args := range [][]string{
+		{"--account", "a@b.com", "drive", "share", "id1"},
+		{"--account", "a@b.com", "drive", "share", "id1", "--anyone", "--role", "nope"},
+	} {
+		result := executeWithDriveTestServiceFactory(t, args, func(context.Context, string) (*drive.Service, error) {
+			t.Fatal("Drive service should not be created for validation errors")
+			return nil, errors.New("unexpected Drive service call")
+		})
+		if result.err == nil {
+			t.Fatalf("expected error for %v", args)
 		}
-		if err := Execute([]string{"--account", "a@b.com", "drive", "share", "id1", "--anyone", "--role", "nope"}); err == nil {
-			t.Fatalf("expected error")
-		}
-	})
+	}
 }
 
 func TestExecute_DriveMoreCommands_Text(t *testing.T) {
-	origNew := newDriveService
-	t.Cleanup(func() { newDriveService = origNew })
-
 	svc, closeSrv := newDriveTestService(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 		switch {
@@ -268,45 +240,33 @@ func TestExecute_DriveMoreCommands_Text(t *testing.T) {
 	}))
 	defer closeSrv()
 
-	newDriveService = stubDriveService(svc)
-
 	tmpFile := filepath.Join(t.TempDir(), "upload.bin")
 	if err := os.WriteFile(tmpFile, []byte("abc"), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	out := captureStdout(t, func() {
-		_ = captureStderr(t, func() {
-			if err := Execute([]string{"--account", "a@b.com", "drive", "search", "hello"}); err != nil {
-				t.Fatalf("search: %v", err)
-			}
-			if err := Execute([]string{"--account", "a@b.com", "drive", "upload", tmpFile, "--name", "upload.bin", "--parent", "np"}); err != nil {
-				t.Fatalf("upload: %v", err)
-			}
-			if err := Execute([]string{"--account", "a@b.com", "drive", "mkdir", "Folder", "--parent", "np"}); err != nil {
-				t.Fatalf("mkdir: %v", err)
-			}
-			if err := Execute([]string{"--account", "a@b.com", "drive", "rename", "id1", "New"}); err != nil {
-				t.Fatalf("rename: %v", err)
-			}
-			if err := Execute([]string{"--account", "a@b.com", "drive", "move", "id1", "--parent", "np"}); err != nil {
-				t.Fatalf("move: %v", err)
-			}
-			if err := Execute([]string{"--force", "--account", "a@b.com", "drive", "share", "id1", "--anyone", "--role", "reader"}); err != nil {
-				t.Fatalf("share: %v", err)
-			}
-			if err := Execute([]string{"--account", "a@b.com", "drive", "permissions", "id1"}); err != nil {
-				t.Fatalf("permissions: %v", err)
-			}
-			if err := Execute([]string{"--force", "--account", "a@b.com", "drive", "unshare", "id1", "p1"}); err != nil {
-				t.Fatalf("unshare: %v", err)
-			}
-			if err := Execute([]string{"--force", "--account", "a@b.com", "drive", "delete", "id1"}); err != nil {
-				t.Fatalf("delete: %v", err)
-			}
-		})
-	})
-	if strings.TrimSpace(out) == "" {
+	var out strings.Builder
+	for _, tc := range []struct {
+		name string
+		args []string
+	}{
+		{"search", []string{"--account", "a@b.com", "drive", "search", "hello"}},
+		{"upload", []string{"--account", "a@b.com", "drive", "upload", tmpFile, "--name", "upload.bin", "--parent", "np"}},
+		{"mkdir", []string{"--account", "a@b.com", "drive", "mkdir", "Folder", "--parent", "np"}},
+		{"rename", []string{"--account", "a@b.com", "drive", "rename", "id1", "New"}},
+		{"move", []string{"--account", "a@b.com", "drive", "move", "id1", "--parent", "np"}},
+		{"share", []string{"--force", "--account", "a@b.com", "drive", "share", "id1", "--anyone", "--role", "reader"}},
+		{"permissions", []string{"--account", "a@b.com", "drive", "permissions", "id1"}},
+		{"unshare", []string{"--force", "--account", "a@b.com", "drive", "unshare", "id1", "p1"}},
+		{"delete", []string{"--force", "--account", "a@b.com", "drive", "delete", "id1"}},
+	} {
+		result := executeWithDriveTestService(t, tc.args, svc)
+		if result.err != nil {
+			t.Fatalf("%s: %v", tc.name, result.err)
+		}
+		out.WriteString(result.stdout)
+	}
+	if strings.TrimSpace(out.String()) == "" {
 		t.Fatalf("expected text output")
 	}
 }

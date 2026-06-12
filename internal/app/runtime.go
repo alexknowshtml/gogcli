@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"io"
+	"net/http"
 
 	"google.golang.org/api/drive/v3"
 )
@@ -13,10 +14,16 @@ type IO struct {
 	Err io.Writer
 }
 
-type DriveServiceFactory func(context.Context, string) (*drive.Service, error)
+type (
+	DriveServiceFactory func(context.Context, string) (*drive.Service, error)
+	DriveDownloadFunc   func(context.Context, *drive.Service, string) (*http.Response, error)
+	DriveExportFunc     func(context.Context, *drive.Service, string, string) (*http.Response, error)
+)
 
 type Services struct {
-	Drive DriveServiceFactory
+	Drive         DriveServiceFactory
+	DriveDownload DriveDownloadFunc
+	DriveExport   DriveExportFunc
 }
 
 type Runtime struct {
