@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -37,10 +39,9 @@ func newGmailRawTestServer(t *testing.T, status int, body map[string]any, hit *g
 	}))
 }
 
-func installMockGmailService(t *testing.T, srv *httptest.Server) {
+func newMockGmailService(t *testing.T, srv *httptest.Server) *gmail.Service {
 	t.Helper()
-	svc := newGoogleTestServiceWithEndpoint(t, srv.Client(), srv.URL+"/", gmail.NewService)
-	stubGoogleTestService(t, &newGmailService, svc)
+	return newGoogleTestServiceWithEndpoint(t, srv.Client(), srv.URL+"/", gmail.NewService)
 }
 
 func fullGmailMessageResponse(id string) map[string]any {
@@ -63,23 +64,24 @@ func TestGmailRaw_HappyPath_DefaultFormatFull(t *testing.T) {
 	hit := &gmailRawHit{}
 	srv := newGmailRawTestServer(t, 0, fullGmailMessageResponse("m1"), hit)
 	defer srv.Close()
-	installMockGmailService(t, srv)
 
-	ctx := rawTestContext(t)
+	var out bytes.Buffer
+	ctx := withGmailTestService(
+		newCmdRuntimeOutputContext(t, &out, io.Discard),
+		newMockGmailService(t, srv),
+	)
 	flags := &RootFlags{Account: "a@b.com"}
-	out := captureStdout(t, func() {
-		if err := runKong(t, &GmailRawCmd{}, []string{"m1"}, ctx, flags); err != nil {
-			t.Fatalf("run: %v", err)
-		}
-	})
+	if err := runKong(t, &GmailRawCmd{}, []string{"m1"}, ctx, flags); err != nil {
+		t.Fatalf("run: %v", err)
+	}
 
 	if got, _ := hit.lastFormat.Load().(string); got != "full" {
 		t.Fatalf("expected default format=full, got: %q", got)
 	}
 
 	var fileOut map[string]any
-	if err := json.Unmarshal([]byte(out), &fileOut); err != nil {
-		t.Fatalf("invalid JSON: %v\nraw: %s", err, out)
+	if err := json.Unmarshal(out.Bytes(), &fileOut); err != nil {
+		t.Fatalf("invalid JSON: %v\nraw: %s", err, out.String())
 	}
 	if fileOut["id"] != "m1" {
 		t.Fatalf("expected id=m1, got: %v", fileOut["id"])
@@ -96,15 +98,15 @@ func TestGmailRaw_FormatPropagation(t *testing.T) {
 			hit := &gmailRawHit{}
 			srv := newGmailRawTestServer(t, 0, fullGmailMessageResponse("m1"), hit)
 			defer srv.Close()
-			installMockGmailService(t, srv)
 
-			ctx := rawTestContext(t)
+			ctx := withGmailTestService(
+				newCmdRuntimeOutputContext(t, io.Discard, io.Discard),
+				newMockGmailService(t, srv),
+			)
 			flags := &RootFlags{Account: "a@b.com"}
-			_ = captureStdout(t, func() {
-				if err := runKong(t, &GmailRawCmd{}, []string{"m1", "--format", fmt}, ctx, flags); err != nil {
-					t.Fatalf("run: %v", err)
-				}
-			})
+			if err := runKong(t, &GmailRawCmd{}, []string{"m1", "--format", fmt}, ctx, flags); err != nil {
+				t.Fatalf("run: %v", err)
+			}
 			if got, _ := hit.lastFormat.Load().(string); got != fmt {
 				t.Fatalf("expected format=%s in request, got: %q", fmt, got)
 			}
@@ -127,29 +129,29 @@ func TestGmailRaw_InvalidFormat(t *testing.T) {
 func TestGmailRaw_APIError(t *testing.T) {
 	srv := newGmailRawTestServer(t, http.StatusInternalServerError, nil, nil)
 	defer srv.Close()
-	installMockGmailService(t, srv)
 
-	ctx := rawTestContext(t)
+	ctx := withGmailTestService(
+		newCmdRuntimeOutputContext(t, io.Discard, io.Discard),
+		newMockGmailService(t, srv),
+	)
 	flags := &RootFlags{Account: "a@b.com"}
-	_ = captureStdout(t, func() {
-		if err := runKong(t, &GmailRawCmd{}, []string{"m1"}, ctx, flags); err == nil {
-			t.Fatalf("expected error on 500")
-		}
-	})
+	if err := runKong(t, &GmailRawCmd{}, []string{"m1"}, ctx, flags); err == nil {
+		t.Fatalf("expected error on 500")
+	}
 }
 
 func TestGmailRaw_NotFound(t *testing.T) {
 	srv := newGmailRawTestServer(t, http.StatusNotFound, nil, nil)
 	defer srv.Close()
-	installMockGmailService(t, srv)
 
-	ctx := rawTestContext(t)
+	ctx := withGmailTestService(
+		newCmdRuntimeOutputContext(t, io.Discard, io.Discard),
+		newMockGmailService(t, srv),
+	)
 	flags := &RootFlags{Account: "a@b.com"}
-	_ = captureStdout(t, func() {
-		if err := runKong(t, &GmailRawCmd{}, []string{"m1"}, ctx, flags); err == nil {
-			t.Fatalf("expected error on 404")
-		}
-	})
+	if err := runKong(t, &GmailRawCmd{}, []string{"m1"}, ctx, flags); err == nil {
+		t.Fatalf("expected error on 404")
+	}
 }
 
 func TestGmailRaw_EmptyID(t *testing.T) {
