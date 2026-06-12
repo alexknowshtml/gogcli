@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -11,6 +11,8 @@ import (
 )
 
 func TestDocsFormatFlagsBuildRequests(t *testing.T) {
+	t.Parallel()
+
 	reqs, err := (DocsFormatFlags{
 		FontFamily:  "Georgia",
 		FontSize:    14,
@@ -68,6 +70,8 @@ func TestDocsFormatFlagsBuildRequests(t *testing.T) {
 }
 
 func TestDocsFormatFlagsBuildRequestsCode(t *testing.T) {
+	t.Parallel()
+
 	reqs, err := (DocsFormatFlags{Code: true}).buildRequests(3, 9, "t.second")
 	if err != nil {
 		t.Fatalf("buildRequests: %v", err)
@@ -96,6 +100,8 @@ func TestDocsFormatFlagsBuildRequestsCode(t *testing.T) {
 }
 
 func TestDocsFormatFlagsValidation(t *testing.T) {
+	t.Parallel()
+
 	if _, err := (DocsFormatFlags{TextColor: "oops"}).buildRequests(1, 2, ""); err == nil {
 		t.Fatalf("expected invalid color error")
 	}
@@ -117,6 +123,8 @@ func TestDocsFormatFlagsValidation(t *testing.T) {
 }
 
 func TestDocsFormatFlagsLinkRequests(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name         string
 		flags        DocsFormatFlags
@@ -141,6 +149,8 @@ func TestDocsFormatFlagsLinkRequests(t *testing.T) {
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			reqs, err := tt.flags.buildRequests(3, 9, "")
 			if err != nil {
 				t.Fatalf("buildRequests: %v", err)
@@ -160,6 +170,8 @@ func TestDocsFormatFlagsLinkRequests(t *testing.T) {
 }
 
 func TestDocsFormatFlagsNoLinkClearsLink(t *testing.T) {
+	t.Parallel()
+
 	reqs, err := (DocsFormatFlags{noLink: true}).buildRequests(3, 9, "")
 	if err != nil {
 		t.Fatalf("buildRequests: %v", err)
@@ -178,6 +190,8 @@ func TestDocsFormatFlagsNoLinkClearsLink(t *testing.T) {
 }
 
 func TestDocsFormatInternalLinkTreatsHeadingID(t *testing.T) {
+	t.Parallel()
+
 	link := docsFormatInternalLink(nil, "", "h.heading1")
 	if link == nil || link.HeadingId != "h.heading1" {
 		t.Fatalf("expected heading ID link, got %#v", link)
@@ -185,8 +199,7 @@ func TestDocsFormatInternalLinkTreatsHeadingID(t *testing.T) {
 }
 
 func TestDocsFormatCmdLinkResolvesHeadingSlug(t *testing.T) {
-	origDocs := newDocsService
-	t.Cleanup(func() { newDocsService = origDocs })
+	t.Parallel()
 
 	var batchRequests [][]*docs.Request
 	docSvc, cleanup := newDocsServiceForTest(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -207,9 +220,8 @@ func TestDocsFormatCmdLinkResolvesHeadingSlug(t *testing.T) {
 		}
 	}))
 	defer cleanup()
-	newDocsService = func(context.Context, string) (*docs.Service, error) { return docSvc, nil }
 
-	ctx := newDocsJSONContext(t)
+	ctx := withDocsTestService(newCmdRuntimeJSONOutputContext(t, io.Discard, io.Discard), docSvc)
 	flags := &RootFlags{Account: "a@b.com"}
 	if err := runKong(t, &DocsFormatCmd{}, []string{"doc1", "--match", "see", "--link", "#target-heading"}, ctx, flags); err != nil {
 		t.Fatalf("format: %v", err)
@@ -231,8 +243,7 @@ func TestDocsFormatCmdLinkResolvesHeadingSlug(t *testing.T) {
 }
 
 func TestDocsWriteFormatsInsertedRangeOnly(t *testing.T) {
-	origDocs := newDocsService
-	t.Cleanup(func() { newDocsService = origDocs })
+	t.Parallel()
 
 	var batchRequests [][]*docs.Request
 	docSvc, cleanup := newDocsServiceForTest(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -258,9 +269,8 @@ func TestDocsWriteFormatsInsertedRangeOnly(t *testing.T) {
 		}
 	}))
 	defer cleanup()
-	newDocsService = func(context.Context, string) (*docs.Service, error) { return docSvc, nil }
 
-	ctx := newDocsJSONContext(t)
+	ctx := withDocsTestService(newCmdRuntimeJSONOutputContext(t, io.Discard, io.Discard), docSvc)
 	flags := &RootFlags{Account: "a@b.com"}
 	if err := runKong(t, &DocsWriteCmd{}, []string{"doc1", "--text", "world", "--append", "--bold", "--font-size", "12"}, ctx, flags); err != nil {
 		t.Fatalf("write: %v", err)
@@ -281,8 +291,7 @@ func TestDocsWriteFormatsInsertedRangeOnly(t *testing.T) {
 }
 
 func TestDocsFormatCmdMatchAll(t *testing.T) {
-	origDocs := newDocsService
-	t.Cleanup(func() { newDocsService = origDocs })
+	t.Parallel()
 
 	var batchRequests [][]*docs.Request
 	docSvc, cleanup := newDocsServiceForTest(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -303,9 +312,8 @@ func TestDocsFormatCmdMatchAll(t *testing.T) {
 		}
 	}))
 	defer cleanup()
-	newDocsService = func(context.Context, string) (*docs.Service, error) { return docSvc, nil }
 
-	ctx := newDocsJSONContext(t)
+	ctx := withDocsTestService(newCmdRuntimeJSONOutputContext(t, io.Discard, io.Discard), docSvc)
 	flags := &RootFlags{Account: "a@b.com"}
 	if err := runKong(t, &DocsFormatCmd{}, []string{"doc1", "--match", "Alpha", "--match-all", "--underline", "--bg-color", "#fff"}, ctx, flags); err != nil {
 		t.Fatalf("format: %v", err)

@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -12,6 +14,8 @@ import (
 )
 
 func TestDocsTablesListNestedTabJSON(t *testing.T) {
+	t.Parallel()
+
 	response := map[string]any{
 		"documentId": "doc1",
 		"revisionId": "rev1",
@@ -61,15 +65,15 @@ func TestDocsTablesListNestedTabJSON(t *testing.T) {
 		}
 	})
 	defer srv.Close()
-	installMockDocsService(t, srv)
+	svc := newMockDocsService(t, srv)
 
-	ctx := outfmt.WithMode(rawTestContext(t), outfmt.Mode{JSON: true})
-	out := captureStdout(t, func() {
-		cmd := &DocsTablesListCmd{}
-		if err := runKong(t, cmd, []string{"doc1", "--tab", "Data"}, ctx, &RootFlags{Account: "a@b.com"}); err != nil {
-			t.Fatalf("run: %v", err)
-		}
-	})
+	var output bytes.Buffer
+	ctx := withDocsTestService(newCmdRuntimeJSONOutputContext(t, &output, io.Discard), svc)
+	cmd := &DocsTablesListCmd{}
+	if err := runKong(t, cmd, []string{"doc1", "--tab", "Data"}, ctx, &RootFlags{Account: "a@b.com"}); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	out := output.String()
 
 	var got struct {
 		DocumentID string              `json:"documentId"`
@@ -92,6 +96,8 @@ func TestDocsTablesListNestedTabJSON(t *testing.T) {
 }
 
 func TestEnumerateDocsImagesOrderAndMetadata(t *testing.T) {
+	t.Parallel()
+
 	doc := &docs.Document{
 		Body: &docs.Body{Content: []*docs.StructuralElement{
 			{
@@ -157,6 +163,8 @@ func TestEnumerateDocsImagesOrderAndMetadata(t *testing.T) {
 }
 
 func TestDocsHeadingsAndParagraphsFilters(t *testing.T) {
+	t.Parallel()
+
 	response := map[string]any{
 		"documentId": "doc1",
 		"body": map[string]any{"content": []any{
@@ -167,14 +175,14 @@ func TestDocsHeadingsAndParagraphsFilters(t *testing.T) {
 	}
 	srv := newDocsRawTestServer(t, 0, response)
 	defer srv.Close()
-	installMockDocsService(t, srv)
+	svc := newMockDocsService(t, srv)
 
-	ctx := outfmt.WithMode(rawTestContext(t), outfmt.Mode{JSON: true})
-	headingsOut := captureStdout(t, func() {
-		if err := runKong(t, &DocsHeadingsListCmd{}, []string{"doc1", "--level", "2"}, ctx, &RootFlags{Account: "a@b.com"}); err != nil {
-			t.Fatalf("headings run: %v", err)
-		}
-	})
+	var output bytes.Buffer
+	ctx := withDocsTestService(newCmdRuntimeJSONOutputContext(t, &output, io.Discard), svc)
+	if err := runKong(t, &DocsHeadingsListCmd{}, []string{"doc1", "--level", "2"}, ctx, &RootFlags{Account: "a@b.com"}); err != nil {
+		t.Fatalf("headings run: %v", err)
+	}
+	headingsOut := output.String()
 	if !strings.Contains(headingsOut, `"index": 2`) ||
 		!strings.Contains(headingsOut, `"text": "Section"`) ||
 		strings.Contains(headingsOut, `"isEmpty"`) ||
@@ -183,11 +191,11 @@ func TestDocsHeadingsAndParagraphsFilters(t *testing.T) {
 		t.Fatalf("headings output: %s", headingsOut)
 	}
 
-	paragraphsOut := captureStdout(t, func() {
-		if err := runKong(t, &DocsParagraphsListCmd{}, []string{"doc1", "--style", "normal_text"}, ctx, &RootFlags{Account: "a@b.com"}); err != nil {
-			t.Fatalf("paragraphs run: %v", err)
-		}
-	})
+	output.Reset()
+	if err := runKong(t, &DocsParagraphsListCmd{}, []string{"doc1", "--style", "normal_text"}, ctx, &RootFlags{Account: "a@b.com"}); err != nil {
+		t.Fatalf("paragraphs run: %v", err)
+	}
+	paragraphsOut := output.String()
 	if !strings.Contains(paragraphsOut, `"index": 3`) ||
 		!strings.Contains(paragraphsOut, `"text": "Body"`) ||
 		strings.Contains(paragraphsOut, `"text": "Section"`) {
@@ -196,6 +204,8 @@ func TestDocsHeadingsAndParagraphsFilters(t *testing.T) {
 }
 
 func TestDocsParagraphsJSONIncludesRunsAndEmptiness(t *testing.T) {
+	t.Parallel()
+
 	response := map[string]any{
 		"documentId": "doc1",
 		"body": map[string]any{"content": []any{
@@ -264,14 +274,14 @@ func TestDocsParagraphsJSONIncludesRunsAndEmptiness(t *testing.T) {
 	}
 	srv := newDocsRawTestServer(t, 0, response)
 	defer srv.Close()
-	installMockDocsService(t, srv)
+	svc := newMockDocsService(t, srv)
 
-	ctx := outfmt.WithMode(rawTestContext(t), outfmt.Mode{JSON: true})
-	out := captureStdout(t, func() {
-		if err := runKong(t, &DocsParagraphsListCmd{}, []string{"doc1"}, ctx, &RootFlags{Account: "a@b.com"}); err != nil {
-			t.Fatalf("run: %v", err)
-		}
-	})
+	var output bytes.Buffer
+	ctx := withDocsTestService(newCmdRuntimeJSONOutputContext(t, &output, io.Discard), svc)
+	if err := runKong(t, &DocsParagraphsListCmd{}, []string{"doc1"}, ctx, &RootFlags{Account: "a@b.com"}); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	out := output.String()
 
 	var got struct {
 		Paragraphs []docsParagraphInspectItem `json:"paragraphs"`
@@ -307,6 +317,8 @@ func TestDocsParagraphsJSONIncludesRunsAndEmptiness(t *testing.T) {
 }
 
 func TestDocsParagraphRunLinkFrom(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name string
 		link *docs.Link
@@ -335,6 +347,8 @@ func TestDocsParagraphRunLinkFrom(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
 			got := docsParagraphRunLinkFrom(test.link)
 			if got == nil || *got != test.want {
 				t.Fatalf("link = %#v, want %#v", got, test.want)
@@ -347,6 +361,8 @@ func TestDocsParagraphRunLinkFrom(t *testing.T) {
 }
 
 func TestDocsParagraphsPlainHasNoHeader(t *testing.T) {
+	t.Parallel()
+
 	response := map[string]any{
 		"documentId": "doc1",
 		"body": map[string]any{"content": []any{
@@ -355,14 +371,17 @@ func TestDocsParagraphsPlainHasNoHeader(t *testing.T) {
 	}
 	srv := newDocsRawTestServer(t, 0, response)
 	defer srv.Close()
-	installMockDocsService(t, srv)
+	svc := newMockDocsService(t, srv)
 
-	ctx := outfmt.WithMode(rawTestContext(t), outfmt.Mode{Plain: true})
-	out := captureStdout(t, func() {
-		if err := runKong(t, &DocsParagraphsListCmd{}, []string{"doc1"}, ctx, &RootFlags{Account: "a@b.com"}); err != nil {
-			t.Fatalf("run: %v", err)
-		}
-	})
+	var output bytes.Buffer
+	ctx := outfmt.WithMode(
+		withDocsTestService(newCmdRuntimeOutputContext(t, &output, io.Discard), svc),
+		outfmt.Mode{Plain: true},
+	)
+	if err := runKong(t, &DocsParagraphsListCmd{}, []string{"doc1"}, ctx, &RootFlags{Account: "a@b.com"}); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	out := output.String()
 	if strings.Contains(out, "START") || out != `1	1	18	NORMAL_TEXT	Hello\tWorld\nNext
 ` {
 		t.Fatalf("plain output = %q", out)
@@ -370,6 +389,8 @@ func TestDocsParagraphsPlainHasNoHeader(t *testing.T) {
 }
 
 func TestEnumerateDocsParagraphsRecursesIntoTablesAndTOC(t *testing.T) {
+	t.Parallel()
+
 	doc := &docs.Document{Body: &docs.Body{Content: []*docs.StructuralElement{
 		{
 			StartIndex: 1,

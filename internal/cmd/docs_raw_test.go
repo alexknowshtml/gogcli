@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -139,10 +140,8 @@ func newDocsRawTestServerWithRequest(
 	}))
 }
 
-func installMockDocsService(t *testing.T, srv *httptest.Server) {
+func newMockDocsService(t *testing.T, srv *httptest.Server) *docs.Service {
 	t.Helper()
-	orig := newDocsService
-	t.Cleanup(func() { newDocsService = orig })
 
 	docSvc, err := docs.NewService(context.Background(),
 		option.WithoutAuthentication(),
@@ -152,7 +151,7 @@ func installMockDocsService(t *testing.T, srv *httptest.Server) {
 	if err != nil {
 		t.Fatalf("NewService: %v", err)
 	}
-	newDocsService = func(context.Context, string) (*docs.Service, error) { return docSvc, nil }
+	return docSvc
 }
 
 func rawTestContext(t *testing.T) context.Context {
@@ -164,24 +163,31 @@ func rawTestContext(t *testing.T) context.Context {
 	return ui.WithUI(context.Background(), u)
 }
 
+func docsRawTestContext(t *testing.T, svc *docs.Service) (context.Context, *bytes.Buffer) {
+	t.Helper()
+	output := &bytes.Buffer{}
+	return withDocsTestService(newCmdRuntimeOutputContext(t, output, io.Discard), svc), output
+}
+
 func TestDocsRaw_HappyPath(t *testing.T) {
+	t.Parallel()
+
 	srv := newDocsRawTestServerWithRequest(t, 0, fullDocResponse("doc1"), func(r *http.Request) {
 		if _, ok := r.URL.Query()["includeTabsContent"]; ok {
 			t.Fatalf("default raw request unexpectedly set includeTabsContent: %s", r.URL.RawQuery)
 		}
 	})
 	defer srv.Close()
-	installMockDocsService(t, srv)
+	svc := newMockDocsService(t, srv)
 
-	ctx := rawTestContext(t)
+	ctx, output := docsRawTestContext(t, svc)
 	flags := &RootFlags{Account: "a@b.com"}
 
-	out := captureStdout(t, func() {
-		cmd := &DocsRawCmd{}
-		if err := runKong(t, cmd, []string{"doc1"}, ctx, flags); err != nil {
-			t.Fatalf("run: %v", err)
-		}
-	})
+	cmd := &DocsRawCmd{}
+	if err := runKong(t, cmd, []string{"doc1"}, ctx, flags); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	out := output.String()
 
 	var got map[string]any
 	if err := json.Unmarshal([]byte(out), &got); err != nil {
@@ -202,6 +208,8 @@ func TestDocsRaw_HappyPath(t *testing.T) {
 }
 
 func TestProjectRawDocumentTabCopiesLegacyFields(t *testing.T) {
+	t.Parallel()
+
 	content := &docs.DocumentTab{
 		Body:                          &docs.Body{},
 		DocumentStyle:                 &docs.DocumentStyle{},
@@ -247,24 +255,27 @@ func TestProjectRawDocumentTabCopiesLegacyFields(t *testing.T) {
 }
 
 func TestDocsRaw_TabProjectsSelectedNestedTab(t *testing.T) {
+	t.Parallel()
+
 	for _, query := range []string{"t.nested", "nested notes"} {
 		t.Run(query, func(t *testing.T) {
+			t.Parallel()
+
 			srv := newDocsRawTestServerWithRequest(t, 0, tabbedDocResponse("doc1"), func(r *http.Request) {
 				if got := r.URL.Query().Get("includeTabsContent"); got != "true" {
 					t.Fatalf("includeTabsContent = %q, want true", got)
 				}
 			})
 			defer srv.Close()
-			installMockDocsService(t, srv)
+			svc := newMockDocsService(t, srv)
 
-			ctx := rawTestContext(t)
+			ctx, output := docsRawTestContext(t, svc)
 			flags := &RootFlags{Account: "a@b.com"}
-			out := captureStdout(t, func() {
-				cmd := &DocsRawCmd{}
-				if err := runKong(t, cmd, []string{"doc1", "--tab", query}, ctx, flags); err != nil {
-					t.Fatalf("run: %v", err)
-				}
-			})
+			cmd := &DocsRawCmd{}
+			if err := runKong(t, cmd, []string{"doc1", "--tab", query}, ctx, flags); err != nil {
+				t.Fatalf("run: %v", err)
+			}
+			out := output.String()
 
 			var got map[string]any
 			if err := json.Unmarshal([]byte(out), &got); err != nil {
@@ -287,38 +298,39 @@ func TestDocsRaw_TabProjectsSelectedNestedTab(t *testing.T) {
 }
 
 func TestDocsRaw_TabNotFound(t *testing.T) {
+	t.Parallel()
+
 	srv := newDocsRawTestServer(t, 0, tabbedDocResponse("doc1"))
 	defer srv.Close()
-	installMockDocsService(t, srv)
+	svc := newMockDocsService(t, srv)
 
-	ctx := rawTestContext(t)
+	ctx, _ := docsRawTestContext(t, svc)
 	flags := &RootFlags{Account: "a@b.com"}
-	_ = captureStdout(t, func() {
-		cmd := &DocsRawCmd{}
-		err := runKong(t, cmd, []string{"doc1", "--tab", "Missing"}, ctx, flags)
-		if err == nil || !strings.Contains(err.Error(), "tab not found") {
-			t.Fatalf("expected tab-not-found error, got %v", err)
-		}
-	})
+	cmd := &DocsRawCmd{}
+	err := runKong(t, cmd, []string{"doc1", "--tab", "Missing"}, ctx, flags)
+	if err == nil || !strings.Contains(err.Error(), "tab not found") {
+		t.Fatalf("expected tab-not-found error, got %v", err)
+	}
 }
 
 func TestDocsRaw_AllTabsReturnsCanonicalDocument(t *testing.T) {
+	t.Parallel()
+
 	srv := newDocsRawTestServerWithRequest(t, 0, tabbedDocResponse("doc1"), func(r *http.Request) {
 		if got := r.URL.Query().Get("includeTabsContent"); got != "true" {
 			t.Fatalf("includeTabsContent = %q, want true", got)
 		}
 	})
 	defer srv.Close()
-	installMockDocsService(t, srv)
+	svc := newMockDocsService(t, srv)
 
-	ctx := rawTestContext(t)
+	ctx, output := docsRawTestContext(t, svc)
 	flags := &RootFlags{Account: "a@b.com"}
-	out := captureStdout(t, func() {
-		cmd := &DocsRawCmd{}
-		if err := runKong(t, cmd, []string{"doc1", "--all-tabs"}, ctx, flags); err != nil {
-			t.Fatalf("run: %v", err)
-		}
-	})
+	cmd := &DocsRawCmd{}
+	if err := runKong(t, cmd, []string{"doc1", "--all-tabs"}, ctx, flags); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	out := output.String()
 
 	var got map[string]any
 	if err := json.Unmarshal([]byte(out), &got); err != nil {
@@ -336,7 +348,9 @@ func TestDocsRaw_AllTabsReturnsCanonicalDocument(t *testing.T) {
 }
 
 func TestDocsRaw_TabAndAllTabsConflict(t *testing.T) {
-	ctx := rawTestContext(t)
+	t.Parallel()
+
+	ctx := newCmdRuntimeOutputContext(t, io.Discard, io.Discard)
 	flags := &RootFlags{Account: "a@b.com"}
 	err := (&DocsRawCmd{DocID: "doc1", Tab: "First", AllTabs: true}).Run(ctx, flags)
 	if err == nil || !strings.Contains(err.Error(), "cannot be used together") {
@@ -360,44 +374,46 @@ func rawDocumentText(t *testing.T, doc map[string]any) string {
 }
 
 func TestDocsRaw_APIError(t *testing.T) {
+	t.Parallel()
+
 	srv := newDocsRawTestServer(t, http.StatusInternalServerError, nil)
 	defer srv.Close()
-	installMockDocsService(t, srv)
+	svc := newMockDocsService(t, srv)
 
-	ctx := rawTestContext(t)
+	ctx, _ := docsRawTestContext(t, svc)
 	flags := &RootFlags{Account: "a@b.com"}
 
-	_ = captureStdout(t, func() {
-		cmd := &DocsRawCmd{}
-		err := runKong(t, cmd, []string{"doc1"}, ctx, flags)
-		if err == nil {
-			t.Fatalf("expected error on 500, got nil")
-		}
-	})
+	cmd := &DocsRawCmd{}
+	err := runKong(t, cmd, []string{"doc1"}, ctx, flags)
+	if err == nil {
+		t.Fatalf("expected error on 500, got nil")
+	}
 }
 
 func TestDocsRaw_NotFound(t *testing.T) {
+	t.Parallel()
+
 	srv := newDocsRawTestServer(t, http.StatusNotFound, nil)
 	defer srv.Close()
-	installMockDocsService(t, srv)
+	svc := newMockDocsService(t, srv)
 
-	ctx := rawTestContext(t)
+	ctx, _ := docsRawTestContext(t, svc)
 	flags := &RootFlags{Account: "a@b.com"}
 
-	_ = captureStdout(t, func() {
-		cmd := &DocsRawCmd{}
-		err := runKong(t, cmd, []string{"doc1"}, ctx, flags)
-		if err == nil {
-			t.Fatalf("expected error on 404")
-		}
-		if !strings.Contains(err.Error(), "not found") {
-			t.Fatalf("expected 'not found' in error, got: %v", err)
-		}
-	})
+	cmd := &DocsRawCmd{}
+	err := runKong(t, cmd, []string{"doc1"}, ctx, flags)
+	if err == nil {
+		t.Fatalf("expected error on 404")
+	}
+	if !strings.Contains(err.Error(), "not found") {
+		t.Fatalf("expected 'not found' in error, got: %v", err)
+	}
 }
 
 func TestDocsRaw_EmptyDocID(t *testing.T) {
-	ctx := rawTestContext(t)
+	t.Parallel()
+
+	ctx := newCmdRuntimeOutputContext(t, io.Discard, io.Discard)
 	flags := &RootFlags{Account: "a@b.com"}
 	err := (&DocsRawCmd{}).Run(ctx, flags)
 	if err == nil {

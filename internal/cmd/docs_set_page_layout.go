@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/alecthomas/kong"
@@ -81,7 +80,7 @@ func (c *DocsPageLayoutCmd) Run(ctx context.Context, kctx *kong.Context, flags *
 		for k, v := range c.LayoutFlags.dryRunPayload() {
 			payload[k] = v
 		}
-		return outfmt.WriteJSON(ctx, os.Stdout, payload)
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), payload)
 	}
 
 	u.Out().Linef("documentId\t%s", docID)

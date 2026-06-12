@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	"google.golang.org/api/docs/v1"
@@ -225,7 +224,7 @@ func (c *DocsFormatCmd) writeResult(ctx context.Context, resp *docs.BatchUpdateD
 		if resp.WriteControl != nil {
 			payload["writeControl"] = resp.WriteControl
 		}
-		return outfmt.WriteJSON(ctx, os.Stdout, payload)
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), payload)
 	}
 
 	u.Out().Linef("id\t%s", resp.DocumentId)

@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -136,7 +135,7 @@ func (c *DocsTablesListCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{
 			"documentId": doc.DocumentId,
 			"tabId":      tabID,
 			"tables":     items,
@@ -162,7 +161,7 @@ func (c *DocsImagesListCmd) Run(ctx context.Context, flags *RootFlags) error {
 	items := enumerateDocsImages(doc)
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{
 			"documentId": doc.DocumentId,
 			"tabId":      tabID,
 			"images":     items,
@@ -312,7 +311,7 @@ func writeDocsParagraphEnumerator(
 		if jsonItems == nil {
 			jsonItems = items
 		}
-		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{
 			"documentId": documentID,
 			"tabId":      tabID,
 			key:          jsonItems,

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -12,8 +13,7 @@ import (
 )
 
 func TestDocsPageLayoutCmd_PagelessDefault(t *testing.T) {
-	origDocs := newDocsService
-	t.Cleanup(func() { newDocsService = origDocs })
+	t.Parallel()
 
 	var batchRequests [][]*docs.Request
 	var targetDocID string
@@ -36,10 +36,9 @@ func TestDocsPageLayoutCmd_PagelessDefault(t *testing.T) {
 		}
 	}))
 	defer cleanup()
-	newDocsService = func(context.Context, string) (*docs.Service, error) { return docSvc, nil }
 
 	flags := &RootFlags{Account: "a@b.com"}
-	ctx := newDocsCmdContext(t)
+	ctx := withDocsTestService(newCmdRuntimeOutputContext(t, io.Discard, io.Discard), docSvc)
 
 	if err := runKong(t, &DocsPageLayoutCmd{}, []string{"doc1"}, ctx, flags); err != nil {
 		t.Fatalf("page-layout: %v", err)
@@ -67,8 +66,7 @@ func TestDocsPageLayoutCmd_PagelessDefault(t *testing.T) {
 }
 
 func TestDocsPageLayoutCmd_Pages(t *testing.T) {
-	origDocs := newDocsService
-	t.Cleanup(func() { newDocsService = origDocs })
+	t.Parallel()
 
 	var batchRequests [][]*docs.Request
 
@@ -87,10 +85,9 @@ func TestDocsPageLayoutCmd_Pages(t *testing.T) {
 		}
 	}))
 	defer cleanup()
-	newDocsService = func(context.Context, string) (*docs.Service, error) { return docSvc, nil }
 
 	flags := &RootFlags{Account: "a@b.com"}
-	ctx := newDocsCmdContext(t)
+	ctx := withDocsTestService(newCmdRuntimeOutputContext(t, io.Discard, io.Discard), docSvc)
 
 	if err := runKong(t, &DocsPageLayoutCmd{}, []string{"doc1", "--layout=pages"}, ctx, flags); err != nil {
 		t.Fatalf("page-layout pages: %v", err)
@@ -109,8 +106,10 @@ func TestDocsPageLayoutCmd_Pages(t *testing.T) {
 }
 
 func TestDocsPageLayoutCmd_EmptyDocID(t *testing.T) {
+	t.Parallel()
+
 	flags := &RootFlags{Account: "a@b.com"}
-	ctx := newDocsCmdContext(t)
+	ctx := newCmdRuntimeOutputContext(t, io.Discard, io.Discard)
 	err := runKong(t, &DocsPageLayoutCmd{}, []string{""}, ctx, flags)
 	if err == nil || !strings.Contains(err.Error(), "empty docId") {
 		t.Fatalf("expected empty docId error, got %v", err)
@@ -118,8 +117,10 @@ func TestDocsPageLayoutCmd_EmptyDocID(t *testing.T) {
 }
 
 func TestDocsPageLayoutCmd_InvalidLayoutRejected(t *testing.T) {
+	t.Parallel()
+
 	flags := &RootFlags{Account: "a@b.com"}
-	ctx := newDocsCmdContext(t)
+	ctx := newCmdRuntimeOutputContext(t, io.Discard, io.Discard)
 	err := runKong(t, &DocsPageLayoutCmd{}, []string{"doc1", "--layout=portrait"}, ctx, flags)
 	if err == nil {
 		t.Fatalf("expected enum validation error, got nil")
@@ -127,6 +128,8 @@ func TestDocsPageLayoutCmd_InvalidLayoutRejected(t *testing.T) {
 }
 
 func TestNormalizePageLayout(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		in      string
 		want    string
@@ -159,16 +162,14 @@ func TestNormalizePageLayout(t *testing.T) {
 }
 
 func TestDocsPageLayoutCmd_DryRun(t *testing.T) {
-	origDocs := newDocsService
-	t.Cleanup(func() { newDocsService = origDocs })
+	t.Parallel()
 
-	newDocsService = func(context.Context, string) (*docs.Service, error) {
+	ctx := withDocsTestServiceFactory(newCmdRuntimeJSONOutputContext(t, io.Discard, io.Discard), func(context.Context, string) (*docs.Service, error) {
 		t.Fatal("docs service should not be created on dry-run")
 		return nil, errors.New("unexpected docs service creation")
-	}
+	})
 
 	flags := &RootFlags{Account: "a@b.com", DryRun: true}
-	ctx := newDocsJSONContext(t)
 
 	err := (&DocsPageLayoutCmd{DocID: "doc1", Layout: "pageless"}).Run(ctx, nil, flags)
 	var exitErr *ExitError
@@ -181,8 +182,7 @@ func TestDocsPageLayoutCmd_DryRun(t *testing.T) {
 }
 
 func TestDocsPageLayoutCmd_PageSizeAndMargins(t *testing.T) {
-	origDocs := newDocsService
-	t.Cleanup(func() { newDocsService = origDocs })
+	t.Parallel()
 
 	var batchRequests [][]*docs.Request
 
@@ -201,10 +201,9 @@ func TestDocsPageLayoutCmd_PageSizeAndMargins(t *testing.T) {
 		}
 	}))
 	defer cleanup()
-	newDocsService = func(context.Context, string) (*docs.Service, error) { return docSvc, nil }
 
 	flags := &RootFlags{Account: "a@b.com"}
-	ctx := newDocsCmdContext(t)
+	ctx := withDocsTestService(newCmdRuntimeOutputContext(t, io.Discard, io.Discard), docSvc)
 
 	args := []string{"doc1", "--layout=pages", "--page-width=8.5in", "--page-height=11in", "--margin-left=0.5in", "--margin-right=36"}
 	if err := runKong(t, &DocsPageLayoutCmd{}, args, ctx, flags); err != nil {
@@ -231,8 +230,7 @@ func TestDocsPageLayoutCmd_PageSizeAndMargins(t *testing.T) {
 }
 
 func TestDocsPageLayoutCmd_PageSizeWithoutLayoutPreservesMode(t *testing.T) {
-	origDocs := newDocsService
-	t.Cleanup(func() { newDocsService = origDocs })
+	t.Parallel()
 
 	var batchRequests [][]*docs.Request
 
@@ -251,10 +249,9 @@ func TestDocsPageLayoutCmd_PageSizeWithoutLayoutPreservesMode(t *testing.T) {
 		}
 	}))
 	defer cleanup()
-	newDocsService = func(context.Context, string) (*docs.Service, error) { return docSvc, nil }
 
 	flags := &RootFlags{Account: "a@b.com"}
-	ctx := newDocsCmdContext(t)
+	ctx := withDocsTestService(newCmdRuntimeOutputContext(t, io.Discard, io.Discard), docSvc)
 
 	if err := runKong(t, &DocsPageLayoutCmd{}, []string{"doc1", "--page-width=960"}, ctx, flags); err != nil {
 		t.Fatalf("page-layout width: %v", err)
@@ -273,6 +270,8 @@ func TestDocsPageLayoutCmd_PageSizeWithoutLayoutPreservesMode(t *testing.T) {
 }
 
 func TestBuildUpdateDocumentStyleRequest_ZeroMarginAllowed(t *testing.T) {
+	t.Parallel()
+
 	req, err := buildUpdateDocumentStyleRequest(docsDocumentStyleOptions{
 		DocsLayoutFlags: DocsLayoutFlags{MarginLeft: "0", MarginRight: "0pt"},
 	})
