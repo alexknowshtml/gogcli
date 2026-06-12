@@ -244,7 +244,7 @@ func (c *ContactsOtherListCmd) Run(ctx context.Context, flags *RootFlags) error 
 		return err
 	}
 
-	svc, err := newPeopleOtherContactsService(ctx, account)
+	svc, err := peopleOtherContactsService(ctx, account)
 	if err != nil {
 		return err
 	}
@@ -338,7 +338,7 @@ func (c *ContactsOtherSearchCmd) Run(ctx context.Context, flags *RootFlags) erro
 		return err
 	}
 
-	svc, err := newPeopleOtherContactsService(ctx, account)
+	svc, err := peopleOtherContactsService(ctx, account)
 	if err != nil {
 		return err
 	}
@@ -429,7 +429,7 @@ func (c *ContactsOtherDeleteCmd) Run(ctx context.Context, flags *RootFlags) erro
 }
 
 func deleteOtherContact(ctx context.Context, account, resourceName string) error {
-	otherSvc, err := newPeopleOtherContactsService(ctx, account)
+	otherSvc, err := peopleOtherContactsService(ctx, account)
 	if err != nil {
 		return err
 	}

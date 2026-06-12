@@ -40,6 +40,7 @@ func newDefaultRuntime() *app.Runtime {
 			Gmail:           googleapi.NewGmail,
 			PeopleContacts:  newPeopleContactsService,
 			PeopleDirectory: newPeopleDirectoryService,
+			PeopleOther:     newPeopleOtherContactsService,
 			Sheets:          googleapi.NewSheets,
 			Slides:          googleapi.NewSlides,
 			Zoom:            newZoomMeetingClient,
@@ -90,6 +91,9 @@ func normalizedRuntime(runtime *app.Runtime) *app.Runtime {
 	}
 	if normalized.Services.PeopleDirectory == nil {
 		normalized.Services.PeopleDirectory = defaults.Services.PeopleDirectory
+	}
+	if normalized.Services.PeopleOther == nil {
+		normalized.Services.PeopleOther = defaults.Services.PeopleOther
 	}
 	if normalized.Services.Sheets == nil {
 		normalized.Services.Sheets = defaults.Services.Sheets
@@ -198,6 +202,13 @@ func peopleDirectoryService(ctx context.Context, account string) (*people.Servic
 		return runtime.Services.PeopleDirectory(ctx, account)
 	}
 	return newPeopleDirectoryService(ctx, account)
+}
+
+func peopleOtherContactsService(ctx context.Context, account string) (*people.Service, error) {
+	if runtime, ok := app.FromContext(ctx); ok && runtime.Services.PeopleOther != nil {
+		return runtime.Services.PeopleOther(ctx, account)
+	}
+	return newPeopleOtherContactsService(ctx, account)
 }
 
 func sheetsService(ctx context.Context, account string) (*sheets.Service, error) {

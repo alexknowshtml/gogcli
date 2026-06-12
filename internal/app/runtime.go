@@ -55,6 +55,7 @@ type Services struct {
 	Gmail           GmailServiceFactory
 	PeopleContacts  PeopleServiceFactory
 	PeopleDirectory PeopleServiceFactory
+	PeopleOther     PeopleServiceFactory
 	Sheets          SheetsServiceFactory
 	Slides          SlidesServiceFactory
 	Zoom            ZoomMeetingClientFactory
