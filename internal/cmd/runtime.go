@@ -382,6 +382,25 @@ func commandLayout(ctx context.Context, kinds ...config.PathKind) (config.Layout
 	return config.ResolveSystemLayoutFor("", kinds...)
 }
 
+func resolveRuntimeClient(runtime *app.Runtime, homeOverride string, email string, override string) (string, error) {
+	if err := configureRuntimeConfig(runtime, homeOverride); err != nil {
+		return "", err
+	}
+	cfg, err := runtime.Config.Read()
+	if err != nil {
+		return "", err
+	}
+
+	return config.ResolveClientForAccountWithCredentials(cfg, email, override, func(client string) (bool, error) {
+		if err := configureRuntimeLayout(runtime, homeOverride, config.PathKindConfig, config.PathKindData); err != nil {
+			return false, err
+		}
+		files := config.NewClientCredentialsStore(runtime.Layout)
+		_, exists, err := files.ExistingPath(client)
+		return exists, err
+	})
+}
+
 func commandIO(ctx context.Context) app.IO {
 	commandIO := newDefaultRuntime().IO
 	if runtimeIO, ok := app.IOFromContext(ctx); ok {

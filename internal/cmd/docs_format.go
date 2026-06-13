@@ -114,7 +114,7 @@ func (c *DocsFormatCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}); err != nil {
 		return err
 	}
-	if err := validateDocsBatchTarget(flags, c.Batch, id); err != nil {
+	if err := validateDocsBatchTarget(ctx, flags, c.Batch, id); err != nil {
 		return err
 	}
 

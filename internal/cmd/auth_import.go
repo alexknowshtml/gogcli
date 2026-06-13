@@ -54,7 +54,7 @@ func (c *AuthImportCmd) Run(ctx context.Context, flags *RootFlags) error {
 	if flags != nil {
 		override = flags.Client
 	}
-	client, clientErr := resolveClientForEmail(email, flags)
+	client, clientErr := resolveClientForEmail(ctx, email, flags)
 	if clientErr != nil {
 		return clientErr
 	}

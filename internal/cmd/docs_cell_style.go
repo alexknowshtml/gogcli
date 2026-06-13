@@ -68,7 +68,7 @@ func (c *DocsCellStyleCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}); err != nil {
 		return err
 	}
-	if err := validateDocsBatchTarget(flags, c.Batch, docID); err != nil {
+	if err := validateDocsBatchTarget(ctx, flags, c.Batch, docID); err != nil {
 		return err
 	}
 

@@ -207,6 +207,9 @@ func executeWithRuntime(args []string, runtime *app.Runtime) (err error) {
 
 	ctx := context.Background()
 	ctx = app.WithRuntime(ctx, runtime)
+	ctx = authclient.WithClientResolver(ctx, func(email string, override string) (string, error) {
+		return resolveRuntimeClient(runtime, cli.Home, email, override)
+	})
 	ctx = outfmt.WithMode(ctx, mode)
 	ctx = outfmt.WithJSONTransform(ctx, outfmt.JSONTransform{
 		ResultsOnly: cli.ResultsOnly,

@@ -121,6 +121,31 @@ func TestManagedRuntimeConfigCanResolveAdditionalKinds(t *testing.T) {
 	}
 }
 
+func TestResolveRuntimeClientUsesInjectedCredentialStore(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	layout := config.Layout{
+		ConfigDir:      filepath.Join(root, "config"),
+		DataDir:        filepath.Join(root, "data"),
+		ExplicitConfig: true,
+		ExplicitData:   true,
+	}
+	files := config.NewClientCredentialsStore(layout)
+	if err := files.WriteMetadata("example.com", config.ClientCredentials{ClientID: "id"}); err != nil {
+		t.Fatalf("write credentials: %v", err)
+	}
+
+	runtime := &app.Runtime{Config: config.NewConfigStore(layout)}
+	client, err := resolveRuntimeClient(runtime, "", "user@example.com", "")
+	if err != nil {
+		t.Fatalf("resolveRuntimeClient: %v", err)
+	}
+	if client != "example.com" {
+		t.Fatalf("client = %q, want example.com", client)
+	}
+}
+
 func TestNormalizedRuntimeOpensSecretsWithInjectedConfig(t *testing.T) {
 	t.Setenv("GOG_KEYRING_BACKEND", "")
 

@@ -96,7 +96,7 @@ func (c *DocsInsertFileChipCmd) Run(ctx context.Context, flags *RootFlags) error
 	if dryRunErr := dryRunDocsSingleInsert(ctx, flags, "docs.insert-file-chip", loc, map[string]any{"fileId": fileID}); dryRunErr != nil {
 		return dryRunErr
 	}
-	if err := validateDocsBatchTarget(flags, c.Batch, c.DocID); err != nil {
+	if err := validateDocsBatchTarget(ctx, flags, c.Batch, c.DocID); err != nil {
 		return err
 	}
 
@@ -197,7 +197,7 @@ func runDocsSingleInsert(ctx context.Context, flags *RootFlags, action string, l
 	if err := dryRunDocsSingleInsert(ctx, flags, action, loc, payload); err != nil {
 		return err
 	}
-	if err := validateDocsBatchTarget(flags, loc.batch, docID); err != nil {
+	if err := validateDocsBatchTarget(ctx, flags, loc.batch, docID); err != nil {
 		return err
 	}
 

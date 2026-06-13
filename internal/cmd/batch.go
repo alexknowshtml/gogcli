@@ -45,7 +45,7 @@ func (c *BatchBeginCmd) Run(ctx context.Context, flags *RootFlags) error {
 	if err != nil {
 		return err
 	}
-	client, err := resolveClientForEmail(account, flags)
+	client, err := resolveClientForEmail(ctx, account, flags)
 	if err != nil {
 		return err
 	}
@@ -323,7 +323,7 @@ func writeDocsBatchEndResult(ctx context.Context, result docsBatchEndResult) err
 	return nil
 }
 
-func validateDocsBatchTarget(flags *RootFlags, batchID, documentID string) error {
+func validateDocsBatchTarget(ctx context.Context, flags *RootFlags, batchID, documentID string) error {
 	batchID = strings.TrimSpace(batchID)
 	if batchID == "" {
 		return nil
@@ -332,7 +332,7 @@ func validateDocsBatchTarget(flags *RootFlags, batchID, documentID string) error
 	if err != nil {
 		return err
 	}
-	client, err := resolveClientForEmail(account, flags)
+	client, err := resolveClientForEmail(ctx, account, flags)
 	if err != nil {
 		return err
 	}
@@ -378,7 +378,7 @@ func queueDocsBatchRequests(ctx context.Context, flags *RootFlags, batchID, docu
 	if err != nil {
 		return true, err
 	}
-	client, err := resolveClientForEmail(account, flags)
+	client, err := resolveClientForEmail(ctx, account, flags)
 	if err != nil {
 		return true, err
 	}

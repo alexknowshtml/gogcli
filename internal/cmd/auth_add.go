@@ -97,7 +97,7 @@ func (c *AuthAddCmd) Run(ctx context.Context, flags *RootFlags) error {
 	u := ui.FromContext(ctx)
 
 	override := authclient.ClientOverrideFromContext(ctx)
-	client, err := authclient.ResolveClientWithOverride(c.Email, override)
+	client, err := authclient.ResolveClientWithOverrideContext(ctx, c.Email, override)
 	if err != nil {
 		return err
 	}

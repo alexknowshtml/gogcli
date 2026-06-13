@@ -48,7 +48,7 @@ func (c *DocsTableColumnWidthCmd) Run(ctx context.Context, flags *RootFlags) err
 	if dryRunErr := dryRunExit(ctx, flags, "docs.table-column-width", dryRunPayload); dryRunErr != nil {
 		return dryRunErr
 	}
-	if err := validateDocsBatchTarget(flags, c.Batch, docID); err != nil {
+	if err := validateDocsBatchTarget(ctx, flags, c.Batch, docID); err != nil {
 		return err
 	}
 

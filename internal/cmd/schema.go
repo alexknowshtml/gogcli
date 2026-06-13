@@ -8,7 +8,6 @@ import (
 
 	"github.com/alecthomas/kong"
 
-	"github.com/steipete/gogcli/internal/config"
 	"github.com/steipete/gogcli/internal/outfmt"
 )
 
@@ -124,7 +123,7 @@ func (c *SchemaCmd) Run(ctx context.Context, kctx *kong.Context, flags *RootFlag
 		return profile.commandPathError(commandNodePath(node))
 	}
 
-	automation, err := buildSchemaAutomation(flags, profile)
+	automation, err := buildSchemaAutomation(ctx, flags, profile)
 	if err != nil {
 		return err
 	}
@@ -138,7 +137,7 @@ func (c *SchemaCmd) Run(ctx context.Context, kctx *kong.Context, flags *RootFlag
 	return outfmt.WriteJSON(ctx, stdoutWriter(ctx), doc)
 }
 
-func buildSchemaAutomation(flags *RootFlags, profile bakedSafetyProfile) (schemaAutomation, error) {
+func buildSchemaAutomation(ctx context.Context, flags *RootFlags, profile bakedSafetyProfile) (schemaAutomation, error) {
 	safety := schemaSafetyState{
 		BakedProfile: schemaBakedProfile{
 			Enabled: profile.enabled,
@@ -160,7 +159,11 @@ func buildSchemaAutomation(flags *RootFlags, profile bakedSafetyProfile) (schema
 		safety.CommandRules.Disabled = sortedCommandRules(flags.DisableCommands)
 	}
 
-	cfg, err := config.ReadConfig()
+	store, err := commandConfigStore(ctx)
+	if err != nil {
+		return schemaAutomation{}, err
+	}
+	cfg, err := store.Read()
 	if err != nil {
 		return schemaAutomation{}, err
 	}
@@ -170,7 +173,7 @@ func buildSchemaAutomation(flags *RootFlags, profile bakedSafetyProfile) (schema
 		return schemaAutomation{}, err
 	}
 	if accountKnown {
-		accountNoSend, noSendErr := config.IsNoSendAccount(account)
+		accountNoSend, noSendErr := store.IsNoSendAccount(account)
 		if noSendErr != nil {
 			return schemaAutomation{}, noSendErr
 		}

@@ -73,7 +73,7 @@ func (c *DocsInsertPageBreakCmd) Run(ctx context.Context, kctx *kong.Context, fl
 	if dryRunErr := dryRunExit(ctx, flags, "docs.insert-page-break", dryRunPayload); dryRunErr != nil {
 		return dryRunErr
 	}
-	if err := validateDocsBatchTarget(flags, c.Batch, docID); err != nil {
+	if err := validateDocsBatchTarget(ctx, flags, c.Batch, docID); err != nil {
 		return err
 	}
 

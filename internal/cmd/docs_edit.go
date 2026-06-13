@@ -142,7 +142,7 @@ func (c *DocsWriteCmd) writePlainText(ctx context.Context, flags *RootFlags, doc
 	if err := dryRunExit(ctx, flags, "docs.write", dryRunPayload); err != nil {
 		return err
 	}
-	if err := validateDocsBatchTarget(flags, c.Batch, docID); err != nil {
+	if err := validateDocsBatchTarget(ctx, flags, c.Batch, docID); err != nil {
 		return err
 	}
 
@@ -654,7 +654,7 @@ func (c *DocsUpdateCmd) Run(ctx context.Context, kctx *kong.Context, flags *Root
 	if dryRunErr := dryRunExit(ctx, flags, "docs.update", c.dryRunPayload(id, len(text), replacing, replaceStart, replaceEnd, at)); dryRunErr != nil {
 		return dryRunErr
 	}
-	if batchErr := validateDocsBatchTarget(flags, c.Batch, id); batchErr != nil {
+	if batchErr := validateDocsBatchTarget(ctx, flags, c.Batch, id); batchErr != nil {
 		return batchErr
 	}
 
@@ -949,7 +949,7 @@ func (c *DocsInsertCmd) Run(ctx context.Context, kctx *kong.Context, flags *Root
 	if dryRunErr := dryRunExit(ctx, flags, "docs.insert", dryRunPayload); dryRunErr != nil {
 		return dryRunErr
 	}
-	if batchErr := validateDocsBatchTarget(flags, c.Batch, docID); batchErr != nil {
+	if batchErr := validateDocsBatchTarget(ctx, flags, c.Batch, docID); batchErr != nil {
 		return batchErr
 	}
 
@@ -1080,7 +1080,7 @@ func (c *DocsDeleteCmd) Run(ctx context.Context, kctx *kong.Context, flags *Root
 	if err := dryRunExit(ctx, flags, "docs.delete", dryRunPayload); err != nil {
 		return err
 	}
-	if err := validateDocsBatchTarget(flags, c.Batch, docID); err != nil {
+	if err := validateDocsBatchTarget(ctx, flags, c.Batch, docID); err != nil {
 		return err
 	}
 

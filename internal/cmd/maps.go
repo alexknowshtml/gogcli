@@ -42,7 +42,7 @@ func (c *MapsDirectionsCmd) Run(ctx context.Context, flags *RootFlags) error {
 	if err != nil {
 		return err
 	}
-	client, err := newMapsClient()
+	client, err := newMapsClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -80,7 +80,7 @@ func (c *MapsDistanceCmd) Run(ctx context.Context, flags *RootFlags) error {
 	if err != nil {
 		return err
 	}
-	client, err := newMapsClient()
+	client, err := newMapsClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -107,7 +107,7 @@ func (c *MapsGeocodeCmd) Run(ctx context.Context, flags *RootFlags) error {
 	if address == "" {
 		return usage("missing address")
 	}
-	client, err := newMapsClient()
+	client, err := newMapsClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -136,7 +136,7 @@ func (c *MapsReverseGeocodeCmd) Run(ctx context.Context, flags *RootFlags) error
 	if err != nil {
 		return err
 	}
-	client, err := newMapsClient()
+	client, err := newMapsClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -161,7 +161,7 @@ func (c *MapsPlacesSearchCmd) Run(ctx context.Context, flags *RootFlags) error {
 	if query == "" {
 		return usage("missing query")
 	}
-	client, err := newMapsPlacesClient()
+	client, err := newMapsPlacesClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -187,7 +187,7 @@ func (c *MapsPlacesDetailsCmd) Run(ctx context.Context, flags *RootFlags) error 
 	if placeID == "" {
 		return usage("empty placeId")
 	}
-	client, err := newMapsPlacesClient()
+	client, err := newMapsPlacesClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -202,16 +202,16 @@ func (c *MapsPlacesDetailsCmd) Run(ctx context.Context, flags *RootFlags) error 
 	return writeMapsPlace(ctx, place)
 }
 
-func newMapsPlacesClient() (*googleapi.PlacesClient, error) {
-	apiKey, err := placesAPIKey()
+func newMapsPlacesClient(ctx context.Context) (*googleapi.PlacesClient, error) {
+	apiKey, err := placesAPIKey(ctx)
 	if err != nil {
 		return nil, err
 	}
 	return googleapi.NewPlacesClient(apiKey, googleapi.WithPlacesBaseURL(os.Getenv("GOG_PLACES_BASE_URL"))), nil
 }
 
-func newMapsClient() (*googleapi.MapsClient, error) {
-	apiKey, err := placesAPIKey()
+func newMapsClient(ctx context.Context) (*googleapi.MapsClient, error) {
+	apiKey, err := placesAPIKey(ctx)
 	if err != nil {
 		return nil, err
 	}

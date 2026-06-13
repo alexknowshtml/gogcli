@@ -11,7 +11,10 @@ import (
 type (
 	contextKey     struct{}
 	accessTokenKey struct{}
+	resolverKey    struct{}
 )
+
+type ClientResolver func(email string, override string) (string, error)
 
 func WithClient(ctx context.Context, client string) context.Context {
 	client = strings.TrimSpace(client)
@@ -59,19 +62,49 @@ func AccessTokenFromContext(ctx context.Context) string {
 	return ""
 }
 
+func WithClientResolver(ctx context.Context, resolver ClientResolver) context.Context {
+	if resolver == nil {
+		return ctx
+	}
+
+	return context.WithValue(ctx, resolverKey{}, resolver)
+}
+
 func ResolveClient(ctx context.Context, email string) (string, error) {
-	cfg, err := config.ReadConfig()
-	if err != nil {
-		return "", fmt.Errorf("read config: %w", err)
-	}
 	override := ClientOverrideFromContext(ctx)
+	if resolver := clientResolverFromContext(ctx); resolver != nil {
+		client, err := resolver(email, override)
+		if err != nil {
+			return "", fmt.Errorf("resolve client: %w", err)
+		}
 
-	client, err := config.ResolveClientForAccount(cfg, email, override)
-	if err != nil {
-		return "", fmt.Errorf("resolve client: %w", err)
+		return client, nil
 	}
 
-	return client, nil
+	return ResolveClientWithOverride(email, override)
+}
+
+func ResolveClientWithOverrideContext(ctx context.Context, email string, override string) (string, error) {
+	if resolver := clientResolverFromContext(ctx); resolver != nil {
+		client, err := resolver(email, override)
+		if err != nil {
+			return "", fmt.Errorf("resolve client: %w", err)
+		}
+
+		return client, nil
+	}
+
+	return ResolveClientWithOverride(email, override)
+}
+
+func clientResolverFromContext(ctx context.Context) ClientResolver {
+	if ctx == nil {
+		return nil
+	}
+
+	resolver, _ := ctx.Value(resolverKey{}).(ClientResolver)
+
+	return resolver
 }
 
 func ResolveClientWithOverride(email string, override string) (string, error) {

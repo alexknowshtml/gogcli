@@ -75,6 +75,15 @@ func DomainFromEmail(email string) string {
 }
 
 func ResolveClientForAccount(cfg File, email string, override string) (string, error) {
+	return ResolveClientForAccountWithCredentials(cfg, email, override, ClientCredentialsExists)
+}
+
+func ResolveClientForAccountWithCredentials(
+	cfg File,
+	email string,
+	override string,
+	credentialsExist func(string) (bool, error),
+) (string, error) {
 	if strings.TrimSpace(override) != "" {
 		return NormalizeClientNameOrDefault(override)
 	}
@@ -92,9 +101,12 @@ func ResolveClientForAccount(cfg File, email string, override string) (string, e
 			return NormalizeClientNameOrDefault(client)
 		}
 
-		if ok, err := ClientCredentialsExists(domain); err == nil && ok {
-			if normalized, err := NormalizeClientName(domain); err == nil {
-				return normalized, nil
+		if credentialsExist != nil {
+			ok, err := credentialsExist(domain)
+			if err == nil && ok {
+				if normalized, err := NormalizeClientName(domain); err == nil {
+					return normalized, nil
+				}
 			}
 		}
 	}

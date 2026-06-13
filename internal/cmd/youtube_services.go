@@ -10,8 +10,8 @@ import (
 	"github.com/steipete/gogcli/internal/googleapi"
 )
 
-func getYouTubeAPIKey() (string, error) {
-	cfg, err := config.ReadConfig()
+func getYouTubeAPIKey(ctx context.Context) (string, error) {
+	cfg, err := loadConfig(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -23,7 +23,7 @@ func getYouTubeAPIKey() (string, error) {
 }
 
 func getYouTubeServiceWithAPIKey(ctx context.Context) (*youtube.Service, error) {
-	key, err := getYouTubeAPIKey()
+	key, err := getYouTubeAPIKey(ctx)
 	if err != nil {
 		return nil, err
 	}

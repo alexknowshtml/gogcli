@@ -144,7 +144,7 @@ func resolveCalendarPlace(ctx context.Context, lookup calendarPlaceLookup) (*cal
 		return nil, nil //nolint:nilnil // no lookup requested
 	}
 
-	apiKey, err := placesAPIKey()
+	apiKey, err := placesAPIKey(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -174,8 +174,8 @@ func resolveCalendarPlace(ctx context.Context, lookup calendarPlaceLookup) (*cal
 	}, nil
 }
 
-func placesAPIKey() (string, error) {
-	cfg, err := config.ReadConfig()
+func placesAPIKey(ctx context.Context) (string, error) {
+	cfg, err := loadConfig(ctx)
 	if err != nil {
 		return "", fmt.Errorf("read config for Places API key: %w", err)
 	}
