@@ -137,6 +137,17 @@ func readGmailWatchStateOptional(ctx context.Context, account string) (gmailWatc
 	return readGmailWatchStateOptionalForLayout(layout, account)
 }
 
+func readGmailWatchState(ctx context.Context, account string) (gmailWatchState, error) {
+	state, found, err := readGmailWatchStateOptional(ctx, account)
+	if err != nil {
+		return gmailWatchState{}, err
+	}
+	if !found {
+		return gmailWatchState{}, errors.New("watch state not found; run gmail watch start")
+	}
+	return state, nil
+}
+
 func readGmailWatchStateOptionalForLayout(layout config.Layout, account string) (gmailWatchState, bool, error) {
 	name := sanitizeAccountForPath(account) + ".json"
 	paths := []string{filepath.Join(layout.GmailWatchDir(), name)}

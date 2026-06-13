@@ -93,6 +93,8 @@ gog gmail history --since <historyId> [--max <n>] [--page <token>]
 
 Notes:
 - `watch start` stores `{historyId, expirationMs, topic, labels}` for account.
+- `watch status` reads atomic state without creating state directories or lock
+  files.
 - `watch renew` reuses stored topic/labels.
 - `watch stop` calls Gmail stop + clears state.
 - `watch serve` and `watch pull` use stored hook config if `--hook-url` is not

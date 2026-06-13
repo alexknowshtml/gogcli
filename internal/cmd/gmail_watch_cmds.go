@@ -117,11 +117,11 @@ func (c *GmailWatchStatusCmd) Run(ctx context.Context, flags *RootFlags) error {
 	if err != nil {
 		return err
 	}
-	store, err := loadGmailWatchStore(ctx, account)
+	state, err := readGmailWatchState(ctx, account)
 	if err != nil {
 		return err
 	}
-	return writeWatchState(ctx, store.Get(), c.ShowSecrets)
+	return writeWatchState(ctx, state, c.ShowSecrets)
 }
 
 type GmailWatchRenewCmd struct {
