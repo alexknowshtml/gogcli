@@ -360,13 +360,23 @@ func TestListGmailBackupMessageIDsResumesFromCheckpoint(t *testing.T) {
 		})
 	})
 	defer cleanup()
+	source, err := gmailbackup.NewServiceSource(svc)
+	if err != nil {
+		t.Fatalf("NewServiceSource: %v", err)
+	}
 
 	var stderr bytes.Buffer
 	u, err := ui.New(ui.Options{Stdout: io.Discard, Stderr: &stderr, Color: "never"})
 	if err != nil {
 		t.Fatalf("ui.New: %v", err)
 	}
-	ids, err := listGmailBackupMessageIDs(ui.WithUI(context.Background(), u), svc, opts)
+	ctx := ui.WithUI(context.Background(), u)
+	ids, err := gmailbackup.ListMessageIDs(ctx, source, gmailbackup.ListOptions{
+		Selection: gmailBackupSelection(opts),
+		Cache:     opts.Cache,
+		UseCache:  true,
+		Progress:  gmailBackupFetchProgress(ctx),
+	})
 	if err != nil {
 		t.Fatalf("listGmailBackupMessageIDs: %v", err)
 	}
@@ -406,8 +416,16 @@ func TestListGmailBackupMessageIDsReusesCompleteCheckpoint(t *testing.T) {
 		http.NotFound(w, r)
 	})
 	defer cleanup()
+	source, err := gmailbackup.NewServiceSource(svc)
+	if err != nil {
+		t.Fatalf("NewServiceSource: %v", err)
+	}
 
-	ids, err := listGmailBackupMessageIDs(context.Background(), svc, opts)
+	ids, err := gmailbackup.ListMessageIDs(context.Background(), source, gmailbackup.ListOptions{
+		Selection: gmailBackupSelection(opts),
+		Cache:     opts.Cache,
+		UseCache:  true,
+	})
 	if err != nil {
 		t.Fatalf("listGmailBackupMessageIDs: %v", err)
 	}
@@ -435,8 +453,16 @@ func TestListGmailBackupMessageIDsMarksMaxLimitedRunComplete(t *testing.T) {
 		})
 	})
 	defer cleanup()
+	source, err := gmailbackup.NewServiceSource(svc)
+	if err != nil {
+		t.Fatalf("NewServiceSource: %v", err)
+	}
 
-	ids, err := listGmailBackupMessageIDs(context.Background(), svc, opts)
+	ids, err := gmailbackup.ListMessageIDs(context.Background(), source, gmailbackup.ListOptions{
+		Selection: gmailBackupSelection(opts),
+		Cache:     opts.Cache,
+		UseCache:  true,
+	})
 	if err != nil {
 		t.Fatalf("listGmailBackupMessageIDs: %v", err)
 	}
@@ -464,12 +490,15 @@ func TestEnsureGmailBackupMessageCacheStopsOnFirstFetchError(t *testing.T) {
 	for i := range ids {
 		ids[i] = fmt.Sprintf("msg-%03d", i)
 	}
-	err := ensureGmailBackupMessageCache(context.Background(), svc, gmailBackupOptions{
-		AccountHash:      "accthash",
-		CacheMessages:    true,
-		IncludeSpamTrash: true,
-		Cache:            newGmailBackupTestCache(t),
-	}, ids)
+	source, err := gmailbackup.NewServiceSource(svc)
+	if err != nil {
+		t.Fatalf("NewServiceSource: %v", err)
+	}
+	_, err = gmailbackup.EnsureMessageCache(context.Background(), source, ids, gmailbackup.FetchOptions{
+		AccountHash: "accthash",
+		Cache:       newGmailBackupTestCache(t),
+		UseCache:    true,
+	})
 	if err == nil || !strings.Contains(err.Error(), "gmail message msg-") {
 		t.Fatalf("expected message fetch error, got %v", err)
 	}
@@ -507,10 +536,14 @@ func TestEnsureGmailBackupMessageCacheWritesEncryptedCheckpoints(t *testing.T) {
 		})
 	})
 	defer cleanup()
+	source, err := gmailbackup.NewServiceSource(svc)
+	if err != nil {
+		t.Fatalf("NewServiceSource: %v", err)
+	}
 
 	ids := []string{"m1", "m2", "m3", "m4", "m5"}
 	cache := newGmailBackupTestCache(t)
-	err = ensureGmailBackupMessageCache(context.Background(), svc, gmailBackupOptions{
+	checkpointOpts := gmailBackupOptions{
 		AccountHash:      "accthash",
 		CacheMessages:    true,
 		IncludeSpamTrash: true,
@@ -519,7 +552,16 @@ func TestEnsureGmailBackupMessageCacheWritesEncryptedCheckpoints(t *testing.T) {
 		CheckpointRunID:  "run-test",
 		BackupOptions:    backupOptionsForCmdTest(t, backup.Options{ConfigPath: config, Push: false}),
 		Cache:            cache,
-	}, ids)
+	}
+	checkpointer := newGmailBackupCheckpointer(context.Background(), checkpointOpts, len(ids))
+	_, err = gmailbackup.EnsureMessageCache(context.Background(), source, ids, gmailbackup.FetchOptions{
+		AccountHash: "accthash",
+		Cache:       cache,
+		UseCache:    true,
+		AfterMessage: func(ctx context.Context, messageID string, event gmailbackup.Event) error {
+			return checkpointer.record(ctx, messageID, event.Done, event.Fetched, event.CacheHits)
+		},
+	})
 	if err != nil {
 		t.Fatalf("ensureGmailBackupMessageCache: %v", err)
 	}
