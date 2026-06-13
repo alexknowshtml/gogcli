@@ -100,12 +100,12 @@ func EnsureStateDir() (string, error) {
 }
 
 func BatchDir() (string, error) {
-	dir, err := StateDir()
+	layout, err := currentLayoutFor(PathKindState)
 	if err != nil {
 		return "", err
 	}
 
-	return filepath.Join(dir, "batches"), nil
+	return layout.BatchDir(), nil
 }
 
 func EnsureBatchDir() (string, error) {
@@ -126,36 +126,26 @@ func EnsureBatchDir() (string, error) {
 // We keep this separate from the main config dir because the file backend creates
 // one file per key.
 func KeyringDir() (string, error) {
-	dataDir, err := DataDir()
+	layout, err := currentLayoutFor(PathKindData)
 	if err != nil {
 		return "", err
 	}
-	primary := filepath.Join(dataDir, "keyring")
-	if explicitDataPath() {
+
+	primary := layout.PrimaryKeyringDir()
+	if layout.ExplicitData {
 		return primary, nil
 	}
 
-	legacy, legacyErr := legacyKeyringDir()
-	if legacyErr != nil {
-		return "", legacyErr
+	legacyLayout, err := currentLayoutFor(PathKindConfig)
+	if err != nil {
+		return "", err
 	}
+	legacy := legacyLayout.LegacyKeyringDir()
 	if st, legacyErr := os.Stat(legacy); legacyErr == nil && st.IsDir() {
 		return legacy, nil
 	}
 
 	return primary, nil
-}
-
-func legacyKeyringDir() (string, error) {
-	dir, err := Dir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, "keyring"), nil
-}
-
-func explicitDataPath() bool {
-	return HasExplicitDataOverride()
 }
 
 func EnsureKeyringDir() (string, error) {
@@ -177,41 +167,28 @@ func ClientCredentialsPath() (string, error) {
 }
 
 func ClientCredentialsPathFor(client string) (string, error) {
-	dir, err := DataDir()
+	layout, err := currentLayoutFor(PathKindData)
 	if err != nil {
 		return "", err
 	}
-	return clientCredentialsPathInDir(dir, client)
+	return layout.ClientCredentialsPathFor(client)
 }
 
 func LegacyClientCredentialsPathFor(client string) (string, error) {
-	dir, err := Dir()
+	layout, err := currentLayoutFor(PathKindConfig)
 	if err != nil {
 		return "", err
 	}
-	return clientCredentialsPathInDir(dir, client)
-}
-
-func clientCredentialsPathInDir(dir string, client string) (string, error) {
-	normalized, err := NormalizeClientNameOrDefault(client)
-	if err != nil {
-		return "", err
-	}
-
-	if normalized == DefaultClientName {
-		return filepath.Join(dir, "credentials.json"), nil
-	}
-
-	return filepath.Join(dir, fmt.Sprintf("credentials-%s.json", normalized)), nil
+	return layout.LegacyClientCredentialsPathFor(client)
 }
 
 func DriveDownloadsDir() (string, error) {
-	dir, err := Dir()
+	layout, err := currentLayoutFor(PathKindConfig)
 	if err != nil {
 		return "", err
 	}
 
-	return filepath.Join(dir, "drive-downloads"), nil
+	return layout.DriveDownloadsDir(), nil
 }
 
 func EnsureDriveDownloadsDir() (string, error) {
@@ -228,12 +205,12 @@ func EnsureDriveDownloadsDir() (string, error) {
 }
 
 func GmailAttachmentsDir() (string, error) {
-	dir, err := Dir()
+	layout, err := currentLayoutFor(PathKindConfig)
 	if err != nil {
 		return "", err
 	}
 
-	return filepath.Join(dir, "gmail-attachments"), nil
+	return layout.GmailAttachmentsDir(), nil
 }
 
 func EnsureGmailAttachmentsDir() (string, error) {
@@ -254,19 +231,20 @@ func GmailWatchDir() (string, error) {
 		return LegacyGmailWatchDir()
 	}
 
-	dir, err := StateDir()
+	layout, err := currentLayoutFor(PathKindState)
 	if err != nil {
 		return "", err
 	}
-	primary := filepath.Join(dir, "gmail-watch")
-	if explicitStatePath() {
+	primary := layout.PrimaryGmailWatchDir()
+	if layout.ExplicitState {
 		return primary, nil
 	}
 
-	legacy, legacyErr := LegacyGmailWatchDir()
-	if legacyErr != nil {
-		return "", legacyErr
+	legacyLayout, err := currentLayoutFor(PathKindConfig)
+	if err != nil {
+		return "", err
 	}
+	legacy := legacyLayout.LegacyGmailWatchDir()
 	if _, primaryErr := os.Stat(primary); os.IsNotExist(primaryErr) {
 		if st, legacyErr := os.Stat(legacy); legacyErr == nil && st.IsDir() {
 			return legacy, nil
@@ -276,12 +254,12 @@ func GmailWatchDir() (string, error) {
 }
 
 func LegacyGmailWatchDir() (string, error) {
-	dir, err := Dir()
+	layout, err := currentLayoutFor(PathKindConfig)
 	if err != nil {
 		return "", err
 	}
 
-	return filepath.Join(dir, "state", "gmail-watch"), nil
+	return layout.LegacyGmailWatchDir(), nil
 }
 
 func explicitStatePath() bool {
@@ -289,56 +267,43 @@ func explicitStatePath() bool {
 }
 
 func KeepServiceAccountPath(email string) (string, error) {
-	dir, err := DataDir()
+	layout, err := currentLayoutFor(PathKindData)
 	if err != nil {
 		return "", err
 	}
-
-	safeEmail := base64.RawURLEncoding.EncodeToString([]byte(strings.ToLower(strings.TrimSpace(email))))
-
-	return filepath.Join(dir, fmt.Sprintf("keep-sa-%s.json", safeEmail)), nil
+	return layout.KeepServiceAccountPath(email), nil
 }
 
 func KeepServiceAccountLegacySafePath(email string) (string, error) {
-	dir, err := Dir()
+	layout, err := currentLayoutFor(PathKindConfig)
 	if err != nil {
 		return "", err
 	}
-
-	safeEmail := base64.RawURLEncoding.EncodeToString([]byte(strings.ToLower(strings.TrimSpace(email))))
-
-	return filepath.Join(dir, fmt.Sprintf("keep-sa-%s.json", safeEmail)), nil
+	return layout.KeepServiceAccountLegacySafePath(email), nil
 }
 
 func KeepServiceAccountLegacyPath(email string) (string, error) {
-	dir, err := Dir()
+	layout, err := currentLayoutFor(PathKindConfig)
 	if err != nil {
 		return "", err
 	}
-
-	return filepath.Join(dir, fmt.Sprintf("keep-sa-%s.json", email)), nil
+	return layout.KeepServiceAccountLegacyPath(email), nil
 }
 
 func ServiceAccountPath(email string) (string, error) {
-	dir, err := DataDir()
+	layout, err := currentLayoutFor(PathKindData)
 	if err != nil {
 		return "", err
 	}
-
-	safeEmail := base64.RawURLEncoding.EncodeToString([]byte(strings.ToLower(strings.TrimSpace(email))))
-
-	return filepath.Join(dir, fmt.Sprintf("sa-%s.json", safeEmail)), nil
+	return layout.ServiceAccountPath(email), nil
 }
 
 func ServiceAccountLegacyPath(email string) (string, error) {
-	dir, err := Dir()
+	layout, err := currentLayoutFor(PathKindConfig)
 	if err != nil {
 		return "", err
 	}
-
-	safeEmail := base64.RawURLEncoding.EncodeToString([]byte(strings.ToLower(strings.TrimSpace(email))))
-
-	return filepath.Join(dir, fmt.Sprintf("sa-%s.json", safeEmail)), nil
+	return layout.ServiceAccountLegacyPath(email), nil
 }
 
 func ExistingServiceAccountPath(email string) (string, error) {

@@ -27,12 +27,12 @@ type File struct {
 var errConfigLockTimeout = errors.New("acquire config lock timeout")
 
 func ConfigPath() (string, error) {
-	dir, err := Dir()
+	layout, err := currentLayoutFor(PathKindConfig)
 	if err != nil {
 		return "", err
 	}
 
-	return filepath.Join(dir, "config.json"), nil
+	return layout.ConfigPath(), nil
 }
 
 func configLockPath() (string, error) {

@@ -431,6 +431,41 @@ func currentLayoutDir(kind PathKind) (string, error) {
 	return newLayoutResolver(currentLayoutEnv(), systemUserDirs()).resolveKind(kind)
 }
 
+func currentLayoutFor(kinds ...PathKind) (Layout, error) {
+	env := currentLayoutEnv()
+	resolver := newLayoutResolver(env, systemUserDirs())
+	layout := Layout{
+		ExplicitConfig: env.hasExplicit(PathKindConfig),
+		ExplicitData:   env.hasExplicit(PathKindData),
+		ExplicitState:  env.hasExplicit(PathKindState),
+		ExplicitCache:  env.hasExplicit(PathKindCache),
+		UsesXDG:        resolver.usesXDG,
+	}
+
+	for _, kind := range kinds {
+		dir, err := resolver.resolveKind(kind)
+		if err != nil {
+			return Layout{}, err
+		}
+		layout.setDir(kind, dir)
+	}
+
+	return layout, nil
+}
+
+func (l *Layout) setDir(kind PathKind, dir string) {
+	switch kind {
+	case PathKindConfig:
+		l.ConfigDir = dir
+	case PathKindData:
+		l.DataDir = dir
+	case PathKindState:
+		l.StateDir = dir
+	case PathKindCache:
+		l.CacheDir = dir
+	}
+}
+
 func usesXDGDefaults() bool {
 	return usesXDGDefaultsFor(runtime.GOOS)
 }
