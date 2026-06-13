@@ -41,7 +41,7 @@ func (c *GmailTrackSetupCmd) Run(ctx context.Context, flags *RootFlags) error {
 	if flags != nil && flags.DryRun {
 		loadConfig = loadTrackingConfigMetadataForAccount
 	}
-	account, cfg, err := loadConfig(flags)
+	account, cfg, configStore, err := loadConfig(ctx, flags)
 	if err != nil {
 		return err
 	}
@@ -179,11 +179,11 @@ func (c *GmailTrackSetupCmd) Run(ctx context.Context, flags *RootFlags) error {
 		cfg.DatabaseID = dbID
 	}
 
-	if err := tracking.SaveConfig(account, cfg); err != nil {
+	if err := configStore.Save(account, cfg); err != nil {
 		return fmt.Errorf("save tracking config: %w", err)
 	}
 
-	path, _ := tracking.ConfigPath()
+	path := configStore.Path()
 	if outfmt.IsJSON(ctx) {
 		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{
 			"account":              account,

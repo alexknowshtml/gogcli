@@ -34,7 +34,7 @@ func (c *GmailTrackKeyRotateCmd) Run(ctx context.Context, flags *RootFlags) erro
 		})
 	}
 
-	account, cfg, err := loadTrackingConfigForAccount(flags)
+	account, cfg, configStore, err := loadTrackingConfigForAccount(ctx, flags)
 	if err != nil {
 		return err
 	}
@@ -112,7 +112,7 @@ func (c *GmailTrackKeyRotateCmd) Run(ctx context.Context, flags *RootFlags) erro
 	cfg.TrackingKey = ""
 	cfg.TrackingCurrentKeyVersion = nextVersion
 	cfg.TrackingKeyVersions = versions
-	if err := tracking.SaveConfig(account, cfg); err != nil {
+	if err := configStore.Save(account, cfg); err != nil {
 		return fmt.Errorf("save tracking config: %w", err)
 	}
 

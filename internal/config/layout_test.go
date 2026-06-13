@@ -161,6 +161,61 @@ func TestLayoutResolverIsLazy(t *testing.T) {
 	}
 }
 
+func TestResolveUserConfigBase(t *testing.T) {
+	t.Parallel()
+
+	userDirs := func(goos, home string) UserDirs {
+		return UserDirs{
+			GOOS:      goos,
+			HomeDir:   func() (string, error) { return home, nil },
+			ConfigDir: func() (string, error) { return filepath.Join(home, "system-config"), nil },
+			CacheDir:  func() (string, error) { return filepath.Join(home, "system-cache"), nil },
+		}
+	}
+
+	t.Run("absolute XDG ignores app override", func(t *testing.T) {
+		t.Parallel()
+		home := t.TempDir()
+		xdg := filepath.Join(home, "xdg")
+		got, err := resolveUserConfigBase(Env{
+			GOGConfigDir:  filepath.Join(home, "explicit"),
+			XDGConfigHome: xdg,
+		}, userDirs("darwin", home))
+		if err != nil {
+			t.Fatalf("resolve: %v", err)
+		}
+		if got != xdg {
+			t.Fatalf("got %q, want %q", got, xdg)
+		}
+	})
+
+	t.Run("Linux default", func(t *testing.T) {
+		t.Parallel()
+		home := t.TempDir()
+		got, err := resolveUserConfigBase(Env{}, userDirs("linux", home))
+		if err != nil {
+			t.Fatalf("resolve: %v", err)
+		}
+		want := filepath.Join(home, ".config")
+		if got != want {
+			t.Fatalf("got %q, want %q", got, want)
+		}
+	})
+
+	t.Run("platform config", func(t *testing.T) {
+		t.Parallel()
+		home := t.TempDir()
+		got, err := resolveUserConfigBase(Env{}, userDirs("darwin", home))
+		if err != nil {
+			t.Fatalf("resolve: %v", err)
+		}
+		want := filepath.Join(home, "system-config")
+		if got != want {
+			t.Fatalf("got %q, want %q", got, want)
+		}
+	})
+}
+
 func TestResolveLayoutMemoizesUserHome(t *testing.T) {
 	t.Parallel()
 

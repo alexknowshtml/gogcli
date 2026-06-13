@@ -83,7 +83,7 @@ func TestLoadTrackingConfigForAccount(t *testing.T) {
 	t.Setenv("GOG_KEYRING_PASSWORD", "testpass")
 
 	flags := &RootFlags{Account: "a@b.com"}
-	account, cfg, err := loadTrackingConfigForAccount(flags)
+	account, cfg, _, err := loadTrackingConfigForAccount(newCmdRuntimeOutputContext(t, io.Discard, io.Discard), flags)
 	if err != nil {
 		t.Fatalf("loadTrackingConfigForAccount: %v", err)
 	}

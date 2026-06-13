@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -19,20 +20,21 @@ func TestResolveTrackingConfig(t *testing.T) {
 
 	cmd := &GmailSendCmd{}
 	cmd.BodyHTML = "<html></html>"
+	ctx := newCmdRuntimeOutputContext(t, io.Discard, io.Discard)
 
 	// Multiple recipients without split should fail.
-	if _, err := cmd.resolveTrackingConfig("a@b.com", []string{"a@b.com", "b@b.com"}, nil, nil, cmd.BodyHTML); err == nil {
+	if _, err := cmd.resolveTrackingConfig(ctx, "a@b.com", []string{"a@b.com", "b@b.com"}, nil, nil, cmd.BodyHTML); err == nil {
 		t.Fatalf("expected error for multiple recipients without split")
 	}
 
 	cmd.TrackSplit = true
 	cmd.BodyHTML = ""
-	if _, err := cmd.resolveTrackingConfig("a@b.com", []string{"a@b.com"}, nil, nil, cmd.BodyHTML); err == nil {
+	if _, err := cmd.resolveTrackingConfig(ctx, "a@b.com", []string{"a@b.com"}, nil, nil, cmd.BodyHTML); err == nil {
 		t.Fatalf("expected error for missing body html")
 	}
 
 	cmd.BodyHTML = "<html></html>"
-	if _, err := cmd.resolveTrackingConfig("a@b.com", []string{"a@b.com"}, nil, nil, cmd.BodyHTML); err == nil {
+	if _, err := cmd.resolveTrackingConfig(ctx, "a@b.com", []string{"a@b.com"}, nil, nil, cmd.BodyHTML); err == nil {
 		t.Fatalf("expected error for unconfigured tracking")
 	}
 
@@ -46,12 +48,9 @@ func TestResolveTrackingConfig(t *testing.T) {
 		TrackingKey: key,
 		AdminKey:    "admin",
 	}
-	err = tracking.SaveConfig("a@b.com", cfg)
-	if err != nil {
-		t.Fatalf("SaveConfig: %v", err)
-	}
+	saveTrackingConfigForTest(t, cfg)
 
-	got, err := cmd.resolveTrackingConfig("a@b.com", []string{"a@b.com"}, nil, nil, cmd.BodyHTML)
+	got, err := cmd.resolveTrackingConfig(ctx, "a@b.com", []string{"a@b.com"}, nil, nil, cmd.BodyHTML)
 	if err != nil {
 		t.Fatalf("resolveTrackingConfig: %v", err)
 	}

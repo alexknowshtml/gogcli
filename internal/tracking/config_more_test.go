@@ -6,21 +6,46 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/steipete/gogcli/internal/config"
 )
 
-func setupTrackingConfigEnv(t *testing.T) {
+func setupTrackingConfigEnv(t *testing.T) *ConfigStore {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "xdg"))
 	t.Setenv("GOG_KEYRING_BACKEND", "file")
 	t.Setenv("GOG_KEYRING_PASSWORD", "testpass")
+
+	return newTrackingConfigTestStore(
+		t,
+		filepath.Join(home, "xdg", config.AppName),
+		filepath.Join(home, "state"),
+		filepath.Join(home, "xdg"),
+		false,
+	)
+}
+
+func newTrackingConfigTestStore(t *testing.T, configDir, stateDir, legacyConfigBase string, explicitState bool) *ConfigStore {
+	t.Helper()
+
+	store, err := NewConfigStore(config.Layout{
+		ConfigDir:     configDir,
+		StateDir:      stateDir,
+		ExplicitState: explicitState,
+	}, legacyConfigBase)
+	if err != nil {
+		t.Fatalf("new config store: %v", err)
+	}
+
+	return store
 }
 
 func TestLoadConfigMissingReturnsDisabled(t *testing.T) {
-	setupTrackingConfigEnv(t)
+	store := setupTrackingConfigEnv(t)
 
-	cfg, err := LoadConfig("a@b.com")
+	cfg, err := store.Load("a@b.com")
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
@@ -31,7 +56,7 @@ func TestLoadConfigMissingReturnsDisabled(t *testing.T) {
 }
 
 func TestSaveConfigSecretsInKeyring(t *testing.T) {
-	setupTrackingConfigEnv(t)
+	store := setupTrackingConfigEnv(t)
 
 	if err := SaveSecrets("a@b.com", "track", "admin"); err != nil {
 		t.Fatalf("SaveSecrets: %v", err)
@@ -44,14 +69,11 @@ func TestSaveConfigSecretsInKeyring(t *testing.T) {
 		TrackingKey:      "should-clear",
 		AdminKey:         "should-clear",
 	}
-	if err := SaveConfig("a@b.com", cfg); err != nil {
+	if err := store.Save("a@b.com", cfg); err != nil {
 		t.Fatalf("SaveConfig: %v", err)
 	}
 
-	path, err := ConfigPath()
-	if err != nil {
-		t.Fatalf("ConfigPath: %v", err)
-	}
+	path := store.Path()
 	var data []byte
 	var readErr error
 
@@ -63,7 +85,7 @@ func TestSaveConfigSecretsInKeyring(t *testing.T) {
 		t.Fatalf("expected secrets omitted from config file")
 	}
 
-	loaded, err := LoadConfig("a@b.com")
+	loaded, err := store.Load("a@b.com")
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
@@ -98,7 +120,7 @@ func TestShouldLoadTrackingSecrets(t *testing.T) {
 }
 
 func TestLoadConfigPrefersFileSecretsWhenKeyringHasStaleValues(t *testing.T) {
-	setupTrackingConfigEnv(t)
+	store := setupTrackingConfigEnv(t)
 
 	if err := SaveSecrets("a@b.com", "stale-track", "stale-admin"); err != nil {
 		t.Fatalf("SaveSecrets: %v", err)
@@ -110,11 +132,11 @@ func TestLoadConfigPrefersFileSecretsWhenKeyringHasStaleValues(t *testing.T) {
 		TrackingKey: "file-track",
 		AdminKey:    "file-admin",
 	}
-	if err := SaveConfig("a@b.com", cfg); err != nil {
+	if err := store.Save("a@b.com", cfg); err != nil {
 		t.Fatalf("SaveConfig: %v", err)
 	}
 
-	loaded, err := LoadConfig("a@b.com")
+	loaded, err := store.Load("a@b.com")
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
@@ -125,7 +147,7 @@ func TestLoadConfigPrefersFileSecretsWhenKeyringHasStaleValues(t *testing.T) {
 }
 
 func TestLoadConfigFallsBackToKeyringWhenLegacySecretsAreEmpty(t *testing.T) {
-	setupTrackingConfigEnv(t)
+	store := setupTrackingConfigEnv(t)
 
 	if err := SaveSecrets("a@b.com", "track", "admin"); err != nil {
 		t.Fatalf("SaveSecrets: %v", err)
@@ -135,11 +157,11 @@ func TestLoadConfigFallsBackToKeyringWhenLegacySecretsAreEmpty(t *testing.T) {
 		Enabled:   true,
 		WorkerURL: "https://example.com",
 	}
-	if err := SaveConfig("a@b.com", cfg); err != nil {
+	if err := store.Save("a@b.com", cfg); err != nil {
 		t.Fatalf("SaveConfig: %v", err)
 	}
 
-	loaded, err := LoadConfig("a@b.com")
+	loaded, err := store.Load("a@b.com")
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
@@ -150,14 +172,11 @@ func TestLoadConfigFallsBackToKeyringWhenLegacySecretsAreEmpty(t *testing.T) {
 }
 
 func TestLoadConfigLegacyFallback(t *testing.T) {
-	setupTrackingConfigEnv(t)
+	store := setupTrackingConfigEnv(t)
 
-	legacy, err := legacyConfigPath()
-	if err != nil {
-		t.Fatalf("legacyConfigPath: %v", err)
-	}
+	legacy := store.legacyPath
 
-	if err = os.MkdirAll(filepath.Dir(legacy), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(legacy), 0o700); err != nil {
 		t.Fatalf("mkdir legacy: %v", err)
 	}
 
@@ -175,7 +194,7 @@ func TestLoadConfigLegacyFallback(t *testing.T) {
 		t.Fatalf("write legacy: %v", err)
 	}
 
-	cfg, err := LoadConfig("a@b.com")
+	cfg, err := store.Load("a@b.com")
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
@@ -185,16 +204,107 @@ func TestLoadConfigLegacyFallback(t *testing.T) {
 	}
 }
 
-func TestLoadConfigSkipsLegacyFallbackWithExplicitGOGHome(t *testing.T) {
-	setupTrackingConfigEnv(t)
-	t.Setenv("GOG_HOME", filepath.Join(t.TempDir(), "isolated"))
+func TestConfigStoreFallbackPrecedence(t *testing.T) {
+	store := setupTrackingConfigEnv(t)
 
-	legacy, err := legacyConfigPath()
-	if err != nil {
-		t.Fatalf("legacyConfigPath: %v", err)
+	write := func(path, workerURL string) {
+		t.Helper()
+
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			t.Fatalf("mkdir %s: %v", path, err)
+		}
+
+		payload, err := json.Marshal(&Config{
+			Enabled:     true,
+			WorkerURL:   workerURL,
+			TrackingKey: "track",
+		})
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+
+		if err := os.WriteFile(path, payload, 0o600); err != nil {
+			t.Fatalf("write %s: %v", path, err)
+		}
 	}
 
-	if err = os.MkdirAll(filepath.Dir(legacy), 0o700); err != nil {
+	write(store.legacyPath, "https://legacy.example.com")
+	write(store.previousPath, "https://previous.example.com")
+
+	cfg, err := store.Load("a@b.com")
+	if err != nil {
+		t.Fatalf("load previous: %v", err)
+	}
+
+	if cfg.WorkerURL != "https://previous.example.com" {
+		t.Fatalf("worker URL = %q, want previous", cfg.WorkerURL)
+	}
+
+	write(store.path, "https://current.example.com")
+
+	cfg, err = store.Load("a@b.com")
+	if err != nil {
+		t.Fatalf("load current: %v", err)
+	}
+
+	if cfg.WorkerURL != "https://current.example.com" {
+		t.Fatalf("worker URL = %q, want current", cfg.WorkerURL)
+	}
+}
+
+func TestConfigStoreLegacyPathIgnoresActiveConfigOverride(t *testing.T) {
+	base := t.TempDir()
+
+	store := newTrackingConfigTestStore(
+		t,
+		filepath.Join(base, "explicit-config"),
+		filepath.Join(base, "state"),
+		filepath.Join(base, "system-config"),
+		false,
+	)
+	if strings.Contains(store.legacyPath, "explicit-config") {
+		t.Fatalf("legacy path depends on active config override: %q", store.legacyPath)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(store.legacyPath), 0o700); err != nil {
+		t.Fatalf("mkdir legacy: %v", err)
+	}
+
+	payload, err := json.Marshal(&Config{
+		Enabled:     true,
+		WorkerURL:   "https://legacy.example.com",
+		TrackingKey: "track",
+	})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	if writeErr := os.WriteFile(store.legacyPath, payload, 0o600); writeErr != nil {
+		t.Fatalf("write legacy: %v", writeErr)
+	}
+
+	cfg, err := store.Load("a@b.com")
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+
+	if cfg.WorkerURL != "https://legacy.example.com" {
+		t.Fatalf("worker URL = %q", cfg.WorkerURL)
+	}
+}
+
+func TestLoadConfigSkipsLegacyFallbackWithExplicitGOGHome(t *testing.T) {
+	base := t.TempDir()
+	store := newTrackingConfigTestStore(
+		t,
+		filepath.Join(base, "config"),
+		filepath.Join(base, "state"),
+		"",
+		true,
+	)
+	legacy := filepath.Join(base, "gog", "tracking.json")
+
+	if err := os.MkdirAll(filepath.Dir(legacy), 0o700); err != nil {
 		t.Fatalf("mkdir legacy: %v", err)
 	}
 
@@ -212,7 +322,7 @@ func TestLoadConfigSkipsLegacyFallbackWithExplicitGOGHome(t *testing.T) {
 		t.Fatalf("write legacy: %v", err)
 	}
 
-	cfg, err := LoadConfig("a@b.com")
+	cfg, err := store.Load("a@b.com")
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
@@ -223,12 +333,8 @@ func TestLoadConfigSkipsLegacyFallbackWithExplicitGOGHome(t *testing.T) {
 }
 
 func TestLegacyConfigPathUsesXDGConfigHome(t *testing.T) {
-	setupTrackingConfigEnv(t)
-
-	path, err := legacyConfigPath()
-	if err != nil {
-		t.Fatalf("legacyConfigPath: %v", err)
-	}
+	store := setupTrackingConfigEnv(t)
+	path := store.legacyPath
 
 	if !strings.Contains(path, filepath.Join("xdg", "gog", "tracking.json")) {
 		t.Fatalf("expected XDG-based legacy path, got %q", path)
@@ -236,13 +342,15 @@ func TestLegacyConfigPathUsesXDGConfigHome(t *testing.T) {
 }
 
 func TestLegacyConfigPathIgnoresRelativeXDGConfigHome(t *testing.T) {
-	setupTrackingConfigEnv(t)
-	t.Setenv("XDG_CONFIG_HOME", "relative-xdg")
-
-	path, err := legacyConfigPath()
-	if err != nil {
-		t.Fatalf("legacyConfigPath: %v", err)
-	}
+	base := t.TempDir()
+	store := newTrackingConfigTestStore(
+		t,
+		filepath.Join(base, "system-config", config.AppName),
+		filepath.Join(base, "state"),
+		filepath.Join(base, "system-config"),
+		false,
+	)
+	path := store.legacyPath
 
 	if !filepath.IsAbs(path) {
 		t.Fatalf("expected absolute legacy path, got %q", path)
@@ -254,9 +362,9 @@ func TestLegacyConfigPathIgnoresRelativeXDGConfigHome(t *testing.T) {
 }
 
 func TestSaveConfigMissingAccount(t *testing.T) {
-	setupTrackingConfigEnv(t)
+	store := setupTrackingConfigEnv(t)
 
-	if err := SaveConfig("", &Config{}); err == nil {
+	if err := store.Save("", &Config{}); err == nil {
 		t.Fatalf("expected error")
 	}
 }

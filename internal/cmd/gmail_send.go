@@ -194,7 +194,7 @@ func (c *GmailSendCmd) Run(ctx context.Context, flags *RootFlags) error {
 
 	var trackingCfg *tracking.Config
 	if c.Track {
-		trackingCfg, err = c.resolveTrackingConfig(account, toRecipients, ccRecipients, bccRecipients, htmlBody)
+		trackingCfg, err = c.resolveTrackingConfig(ctx, account, toRecipients, ccRecipients, bccRecipients, htmlBody)
 		if err != nil {
 			return err
 		}
@@ -219,7 +219,7 @@ func (c *GmailSendCmd) Run(ctx context.Context, flags *RootFlags) error {
 	return writeSendResults(ctx, u, from.header, results, attachmentMetadata)
 }
 
-func (c *GmailSendCmd) resolveTrackingConfig(account string, toRecipients, ccRecipients, bccRecipients []string, htmlBody string) (*tracking.Config, error) {
+func (c *GmailSendCmd) resolveTrackingConfig(ctx context.Context, account string, toRecipients, ccRecipients, bccRecipients []string, htmlBody string) (*tracking.Config, error) {
 	totalRecipients := len(toRecipients) + len(ccRecipients) + len(bccRecipients)
 	if totalRecipients != 1 && !c.TrackSplit {
 		return nil, usage("--track requires exactly 1 recipient (no cc/bcc); use --track-split for per-recipient sends")
@@ -229,7 +229,11 @@ func (c *GmailSendCmd) resolveTrackingConfig(account string, toRecipients, ccRec
 		return nil, fmt.Errorf("--track requires an HTML body (use --body-html or --quote)")
 	}
 
-	trackingCfg, err := tracking.LoadConfig(account)
+	store, err := newTrackingConfigStore(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("load tracking config: %w", err)
+	}
+	trackingCfg, err := store.Load(account)
 	if err != nil {
 		return nil, fmt.Errorf("load tracking config: %w", err)
 	}

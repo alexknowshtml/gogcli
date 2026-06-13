@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/steipete/gogcli/internal/outfmt"
-	"github.com/steipete/gogcli/internal/tracking"
 	"github.com/steipete/gogcli/internal/ui"
 )
 
@@ -13,12 +12,12 @@ type GmailTrackStatusCmd struct{}
 
 func (c *GmailTrackStatusCmd) Run(ctx context.Context, flags *RootFlags) error {
 	u := ui.FromContext(ctx)
-	account, cfg, err := loadTrackingConfigForAccount(flags)
+	account, cfg, configStore, err := loadTrackingConfigForAccount(ctx, flags)
 	if err != nil {
 		return err
 	}
 
-	path, _ := tracking.ConfigPath()
+	path := configStore.Path()
 	if outfmt.IsJSON(ctx) {
 		payload := map[string]any{
 			"account":    account,

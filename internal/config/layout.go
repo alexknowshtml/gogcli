@@ -418,6 +418,36 @@ func ResolveSystemLayoutFor(homeOverride string, kinds ...PathKind) (Layout, err
 	return resolveLayoutFor(env, systemUserDirs(), kinds...)
 }
 
+func ResolveUserConfigBase() (string, error) {
+	return resolveUserConfigBase(currentLayoutEnv(), systemUserDirs())
+}
+
+func resolveUserConfigBase(env Env, dirs UserDirs) (string, error) {
+	if xdg := strings.TrimSpace(env.XDGConfigHome); filepath.IsAbs(xdg) {
+		return xdg, nil
+	}
+	if usesXDGDefaultsFor(dirs.GOOS) {
+		home, err := dirs.HomeDir()
+		if err != nil {
+			return "", fmt.Errorf("resolve home config dir: %w", err)
+		}
+		return filepath.Join(home, ".config"), nil
+	}
+
+	configDir, err := dirs.ConfigDir()
+	if err != nil {
+		return "", fmt.Errorf("resolve user config dir: %w", err)
+	}
+	if filepath.IsAbs(configDir) {
+		return configDir, nil
+	}
+	home, err := dirs.HomeDir()
+	if err != nil {
+		return "", fmt.Errorf("resolve home config dir: %w", err)
+	}
+	return filepath.Join(home, ".config"), nil
+}
+
 func resolveLayoutFor(env Env, dirs UserDirs, kinds ...PathKind) (Layout, error) {
 	resolver := newLayoutResolver(env, dirs)
 	return resolver.resolveLayoutFor(kinds...)

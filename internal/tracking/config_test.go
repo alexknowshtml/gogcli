@@ -10,7 +10,7 @@ import (
 )
 
 func TestConfigRoundTrip(t *testing.T) {
-	setupTrackingConfigEnv(t)
+	store := setupTrackingConfigEnv(t)
 
 	account := "test@example.com"
 
@@ -27,11 +27,11 @@ func TestConfigRoundTrip(t *testing.T) {
 		SecretsInKeyring: true,
 	}
 
-	if err := SaveConfig(account, cfg); err != nil {
+	if err := store.Save(account, cfg); err != nil {
 		t.Fatalf("SaveConfig failed: %v", err)
 	}
 
-	loaded, err := LoadConfig(account)
+	loaded, err := store.Load(account)
 	if err != nil {
 		t.Fatalf("LoadConfig failed: %v", err)
 	}
@@ -60,10 +60,7 @@ func TestConfigRoundTrip(t *testing.T) {
 		t.Error("IsConfigured should return true")
 	}
 
-	path, pathErr := ConfigPath()
-	if pathErr != nil {
-		t.Fatalf("ConfigPath: %v", pathErr)
-	}
+	path := store.Path()
 
 	b, readErr := os.ReadFile(path)
 	if readErr != nil {
@@ -81,9 +78,9 @@ func TestConfigRoundTrip(t *testing.T) {
 }
 
 func TestLoadConfigMissing(t *testing.T) {
-	setupTrackingConfigEnv(t)
+	store := setupTrackingConfigEnv(t)
 
-	cfg, err := LoadConfig("missing@example.com")
+	cfg, err := store.Load("missing@example.com")
 	if err != nil {
 		t.Fatalf("LoadConfig failed: %v", err)
 	}
@@ -98,14 +95,14 @@ func TestLoadConfigMissing(t *testing.T) {
 }
 
 func TestLoadConfigDifferentAccount(t *testing.T) {
-	setupTrackingConfigEnv(t)
+	store := setupTrackingConfigEnv(t)
 
 	cfg := &Config{Enabled: true, WorkerURL: "https://test.workers.dev"}
-	if err := SaveConfig("a@example.com", cfg); err != nil {
+	if err := store.Save("a@example.com", cfg); err != nil {
 		t.Fatalf("SaveConfig failed: %v", err)
 	}
 
-	loaded, err := LoadConfig("b@example.com")
+	loaded, err := store.Load("b@example.com")
 	if err != nil {
 		t.Fatalf("LoadConfig failed: %v", err)
 	}
@@ -116,25 +113,22 @@ func TestLoadConfigDifferentAccount(t *testing.T) {
 }
 
 func TestSaveConfigReturnsReadError(t *testing.T) {
-	setupTrackingConfigEnv(t)
+	store := setupTrackingConfigEnv(t)
 
-	path, err := ConfigPath()
-	if err != nil {
-		t.Fatalf("ConfigPath: %v", err)
-	}
+	path := store.Path()
 
 	if mkdirErr := os.MkdirAll(path, 0o700); mkdirErr != nil {
 		t.Fatalf("mkdir config path: %v", mkdirErr)
 	}
 
-	err = SaveConfig("a@example.com", &Config{Enabled: true, WorkerURL: "https://worker.example.com"})
+	err := store.Save("a@example.com", &Config{Enabled: true, WorkerURL: "https://worker.example.com"})
 	if err == nil || !strings.Contains(err.Error(), "read tracking config") {
 		t.Fatalf("expected read error, got %v", err)
 	}
 }
 
 func TestSaveConfigConcurrentKeepsAccounts(t *testing.T) {
-	setupTrackingConfigEnv(t)
+	store := setupTrackingConfigEnv(t)
 
 	const count = 12
 	var wg sync.WaitGroup
@@ -146,7 +140,7 @@ func TestSaveConfigConcurrentKeepsAccounts(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 
-			errCh <- SaveConfig(
+			errCh <- store.Save(
 				fmt.Sprintf("user%d@example.com", i),
 				&Config{Enabled: true, WorkerURL: "https://worker.example.com"},
 			)
@@ -162,10 +156,7 @@ func TestSaveConfigConcurrentKeepsAccounts(t *testing.T) {
 		}
 	}
 
-	path, err := ConfigPath()
-	if err != nil {
-		t.Fatalf("ConfigPath: %v", err)
-	}
+	path := store.Path()
 
 	data, err := os.ReadFile(path)
 	if err != nil {

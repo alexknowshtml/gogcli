@@ -11,6 +11,7 @@
 - Drive: preserve repeated folder placements in tree, inventory, and size summaries; reject cyclic folder graphs instead of collapsing paths or scanning indefinitely.
 - Classroom: require an archived course before deletion with actionable lifecycle guidance, and prevent live tests from leaving consumer-account courses behind.
 - Gmail: bind watch state to the selected runtime state directory and serialize atomic updates across concurrent watch processes.
+- Gmail: bind tracking configuration to the selected runtime state directory and preserve concurrent account updates with shared atomic locking.
 
 ## 0.25.0 - 2026-06-12
 

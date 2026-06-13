@@ -6,6 +6,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/steipete/gogcli/internal/config"
 )
 
 func TestIntegrationEncryptDecryptWithWorker(t *testing.T) {
@@ -14,7 +16,22 @@ func TestIntegrationEncryptDecryptWithWorker(t *testing.T) {
 		t.Skip("set GOG_IT_ACCOUNT to run integration test")
 	}
 
-	cfg, err := LoadConfig(account)
+	layout, err := config.ResolveSystemLayoutFor("", config.PathKindConfig, config.PathKindState)
+	if err != nil {
+		t.Skipf("Tracking layout unavailable: %v", err)
+	}
+	legacyConfigBase := ""
+	if !layout.ExplicitState {
+		legacyConfigBase, err = config.ResolveUserConfigBase()
+		if err != nil {
+			t.Skipf("Legacy tracking path unavailable: %v", err)
+		}
+	}
+	store, err := NewConfigStore(layout, legacyConfigBase)
+	if err != nil {
+		t.Skipf("Tracking store unavailable: %v", err)
+	}
+	cfg, err := store.Load(account)
 	if err != nil || !cfg.IsConfigured() {
 		t.Skip("Tracking not configured, skipping integration test")
 	}
