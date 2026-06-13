@@ -79,20 +79,13 @@ func (c *ContactsListCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return nil
 	}
 
-	w, flush := tableWriter(ctx)
-	defer flush()
-	fmt.Fprintln(w, "RESOURCE\tNAME\tEMAIL\tPHONE\tBIRTHDAY")
-	for _, p := range resp.Connections {
-		if p == nil {
-			continue
-		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
-			p.ResourceName,
-			sanitizeTab(primaryName(p)),
-			sanitizeTab(primaryEmail(p)),
-			sanitizeTab(primaryPhone(p)),
-			sanitizeTab(primaryBirthday(p)),
-		)
+	if err := outfmt.WriteTable(
+		ctx,
+		stdoutWriter(ctx),
+		compactPeopleRows(resp.Connections),
+		contactColumns(),
+	); err != nil {
+		return err
 	}
 
 	printNextPageHint(u, resp.NextPageToken)

@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"google.golang.org/api/people/v1"
@@ -150,18 +149,13 @@ func (c *PeopleSearchCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return failEmptyExit(c.FailEmpty)
 	}
 
-	w, flush := tableWriter(ctx)
-	defer flush()
-	fmt.Fprintln(w, "RESOURCE\tNAME\tEMAIL")
-	for _, p := range peopleList {
-		if p == nil {
-			continue
-		}
-		fmt.Fprintf(w, "%s\t%s\t%s\n",
-			p.ResourceName,
-			sanitizeTab(primaryName(p)),
-			sanitizeTab(primaryEmail(p)),
-		)
+	if err := outfmt.WriteTable(
+		ctx,
+		stdoutWriter(ctx),
+		compactPeopleRows(peopleList),
+		directoryPersonColumns(),
+	); err != nil {
+		return err
 	}
 	printNextPageHint(u, nextPageToken)
 	return nil
@@ -231,20 +225,7 @@ func (c *PeopleRelationsCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return nil
 	}
 
-	w, flush := tableWriter(ctx)
-	defer flush()
-	fmt.Fprintln(w, "TYPE\tPERSON")
-	for _, rel := range relations {
-		typ := rel.Type
-		if typ == "" {
-			typ = rel.FormattedType
-		}
-		fmt.Fprintf(w, "%s\t%s\n",
-			sanitizeTab(typ),
-			sanitizeTab(rel.Person),
-		)
-	}
-	return nil
+	return outfmt.WriteTable(ctx, stdoutWriter(ctx), relations, peopleRelationColumns())
 }
 
 func peopleServiceForResource(ctx context.Context, account string, resource string) (*people.Service, error) {

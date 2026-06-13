@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"fmt"
 	"sort"
 	"strings"
 
@@ -268,28 +267,7 @@ func writeContactsDedupe(ctx context.Context, u *ui.UI, groups []contactsDedupeG
 		}
 		return nil
 	}
-	w, flush := tableWriter(ctx)
-	defer flush()
-	fmt.Fprintln(w, "GROUP\tACTION\tRESOURCE\tNAME\tEMAIL\tPHONE\tMATCHED_ON")
-	for i, group := range groups {
-		matchedOn := strings.Join(group.MatchedOn, ",")
-		for _, member := range group.Members {
-			action := "merge"
-			if contactsDedupeResource(member) == contactsDedupeResource(group.Primary) {
-				action = "keep"
-			}
-			fmt.Fprintf(w, "%d\t%s\t%s\t%s\t%s\t%s\t%s\n",
-				i+1,
-				action,
-				sanitizeTab(contactsDedupeResource(member)),
-				sanitizeTab(primaryName(member)),
-				sanitizeTab(primaryEmail(member)),
-				sanitizeTab(primaryPhone(member)),
-				sanitizeTab(matchedOn),
-			)
-		}
-	}
-	return nil
+	return outfmt.WriteTable(ctx, stdoutWriter(ctx), contactsDedupeRows(groups), contactsDedupeColumns())
 }
 
 func contactsDedupeGroupsJSON(groups []contactsDedupeGroup) []map[string]any {
