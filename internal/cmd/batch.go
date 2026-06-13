@@ -101,7 +101,7 @@ type BatchShowCmd struct {
 
 func (c *BatchShowCmd) Run(ctx context.Context) error {
 	batchID := strings.TrimSpace(c.BatchID)
-	if err := validateDocsBatchID(batchID); err != nil {
+	if err := validateDocsBatchIDArg(batchID); err != nil {
 		return err
 	}
 	store, err := openDocsBatchStore(ctx)
@@ -135,7 +135,7 @@ type BatchAbortCmd struct {
 
 func (c *BatchAbortCmd) Run(ctx context.Context, flags *RootFlags) error {
 	batchID := strings.TrimSpace(c.BatchID)
-	if err := validateDocsBatchID(batchID); err != nil {
+	if err := validateDocsBatchIDArg(batchID); err != nil {
 		return err
 	}
 	if err := dryRunExit(ctx, flags, "batch.abort", map[string]any{"batch_id": batchID}); err != nil {
@@ -212,7 +212,7 @@ func (c *BatchEndCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return usage("--continue-on-error and --auto-split are mutually exclusive")
 	}
 	batchID := strings.TrimSpace(c.BatchID)
-	if err := validateDocsBatchID(batchID); err != nil {
+	if err := validateDocsBatchIDArg(batchID); err != nil {
 		return err
 	}
 	if flags != nil && flags.DryRun {
@@ -352,6 +352,9 @@ func validateDocsBatchTarget(ctx context.Context, flags *RootFlags, batchID, doc
 	if batchID == "" {
 		return nil
 	}
+	if err := validateDocsBatchIDArg(batchID); err != nil {
+		return err
+	}
 	account, err := requireAccount(flags)
 	if err != nil {
 		return err
@@ -395,6 +398,9 @@ func queueDocsBatchRequests(ctx context.Context, flags *RootFlags, batchID, docu
 	if batchID == "" {
 		return false, nil
 	}
+	if err := validateDocsBatchIDArg(batchID); err != nil {
+		return true, err
+	}
 	if len(requests) == 0 {
 		return true, errors.New("no Docs requests to append")
 	}
@@ -428,4 +434,8 @@ func queueDocsBatchRequests(ctx context.Context, flags *RootFlags, batchID, docu
 	}
 
 	return true, err
+}
+
+func validateDocsBatchIDArg(batchID string) error {
+	return newUsageError(validateDocsBatchID(batchID))
 }

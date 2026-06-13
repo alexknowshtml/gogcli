@@ -322,11 +322,14 @@ func TestBatchListAndShowReadWithoutLock(t *testing.T) {
 	}
 }
 
-func TestBatchShowAndEndValidateBeforeCreatingState(t *testing.T) {
+func TestBatchCommandsValidateBeforeCreatingState(t *testing.T) {
 	stateDir := t.TempDir()
 	ctx := withDocsBatchStateDir(newCmdRuntimeOutputContext(t, io.Discard, io.Discard), stateDir)
 
 	for name, run := range map[string]func() error{
+		"abort": func() error {
+			return (&BatchAbortCmd{BatchID: "placeholder"}).Run(ctx, &RootFlags{DryRun: true})
+		},
 		"show": func() error {
 			return (&BatchShowCmd{BatchID: "placeholder"}).Run(ctx)
 		},
@@ -336,13 +339,26 @@ func TestBatchShowAndEndValidateBeforeCreatingState(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			err := run()
-			if err == nil || !strings.Contains(err.Error(), "invalid batch ID: placeholder") {
+			if err == nil || ExitCode(err) != 2 || !strings.Contains(err.Error(), "invalid batch ID: placeholder") {
 				t.Fatalf("error = %v", err)
 			}
 			if _, statErr := os.Stat(filepath.Join(stateDir, "batches")); !os.IsNotExist(statErr) {
 				t.Fatalf("batch directory unexpectedly created: %v", statErr)
 			}
 		})
+	}
+}
+
+func TestValidateDocsBatchTargetRejectsInvalidIDBeforeAccountResolution(t *testing.T) {
+	stateDir := t.TempDir()
+	ctx := withDocsBatchStateDir(newCmdRuntimeOutputContext(t, io.Discard, io.Discard), stateDir)
+
+	err := validateDocsBatchTarget(ctx, &RootFlags{}, "placeholder", "doc1")
+	if err == nil || ExitCode(err) != 2 || !strings.Contains(err.Error(), "invalid batch ID: placeholder") {
+		t.Fatalf("error = %v", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(stateDir, "batches")); !os.IsNotExist(statErr) {
+		t.Fatalf("batch directory unexpectedly created: %v", statErr)
 	}
 }
 

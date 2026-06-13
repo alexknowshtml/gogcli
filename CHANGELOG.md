@@ -9,6 +9,7 @@
 
 ### Fixed
 
+- CLI: classify invalid Docs batch IDs and incomplete Gmail filter definitions as usage errors with exit code 2.
 - Docs: keep batch list/show, batch target validation, and batch end dry-runs read-only without creating state directories or lock files.
 - Gmail: make `watch status` read atomic watch state without creating state directories or lock files.
 - Gmail: make `watch serve --dry-run` return a secret-free daemon plan without creating/locking/updating watch state, saving hook settings, creating clients, or opening a socket.
