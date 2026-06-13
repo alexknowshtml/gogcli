@@ -9,6 +9,7 @@
 
 ### Fixed
 
+- Gmail: make `watch serve --dry-run` return a secret-free daemon plan without creating/locking/updating watch state, saving hook settings, creating clients, or opening a socket.
 - Backup: make status, verify, cat, and export use read-only repository setup and file-free dry-run plans, support pre-created empty repository directories, keep failed clones clean, disable Git credential prompts under `--no-input`, redact credentials from Git errors, preserve clone failures instead of initializing a new repository, and give status/verify the existing `--no-pull` flags while retaining hidden compatibility for legacy write-only options.
 - Auth: make `auth manage --dry-run` preview the browser flow without touching the keyring or server, and fail fast when real execution uses `--no-input`.
 - Docs: make `docs cell-style` table, row, and column coordinates one-based like adjacent table commands, with negative table indexes counting from the end.

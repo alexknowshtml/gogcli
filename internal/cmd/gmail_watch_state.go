@@ -129,6 +129,41 @@ func loadGmailWatchStoreForLayout(layout config.Layout, account string) (*gmailW
 	return store, nil
 }
 
+func readGmailWatchStateOptional(ctx context.Context, account string) (gmailWatchState, bool, error) {
+	layout, err := commandLayout(ctx, config.PathKindConfig, config.PathKindState)
+	if err != nil {
+		return gmailWatchState{}, false, err
+	}
+	return readGmailWatchStateOptionalForLayout(layout, account)
+}
+
+func readGmailWatchStateOptionalForLayout(layout config.Layout, account string) (gmailWatchState, bool, error) {
+	name := sanitizeAccountForPath(account) + ".json"
+	paths := []string{filepath.Join(layout.GmailWatchDir(), name)}
+	if !layout.ExplicitState {
+		legacyPath := filepath.Join(layout.LegacyGmailWatchDir(), name)
+		if legacyPath != paths[0] {
+			paths = append(paths, legacyPath)
+		}
+	}
+
+	for _, path := range paths {
+		data, err := os.ReadFile(path) //nolint:gosec // path is derived from the configured state directory and sanitized account.
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return gmailWatchState{}, false, err
+		}
+		var state gmailWatchState
+		if err := json.Unmarshal(data, &state); err != nil {
+			return gmailWatchState{}, false, err
+		}
+		return state, true, nil
+	}
+	return gmailWatchState{}, false, nil
+}
+
 func (s *gmailWatchStore) Get() gmailWatchState {
 	s.mu.Lock()
 	defer s.mu.Unlock()

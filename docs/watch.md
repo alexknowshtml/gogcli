@@ -100,6 +100,10 @@ Notes:
 - `watch pull` needs Google credentials that can consume the Pub/Sub
   subscription.
 - `watch serve` needs an HTTP endpoint reachable by Pub/Sub.
+- `watch serve --dry-run` validates flags and prints a secret-free listen/auth/
+  hook plan. It may read existing atomic watch state to resolve stored hook
+  settings, but does not create/lock/update state, create clients, or open a
+  socket.
 - `watch serve` and `watch pull` default `--exclude-labels` to `SPAM,TRASH`; set to an empty string to disable.
 - Exclude label IDs are matched exactly (case-sensitive opaque IDs).
 - `watch serve --fetch-delay` and `watch pull --fetch-delay` delay Gmail

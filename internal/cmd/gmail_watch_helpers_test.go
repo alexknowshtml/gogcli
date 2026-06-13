@@ -41,6 +41,42 @@ func newGmailWatchTestStore(t *testing.T, account string) *gmailWatchStore {
 	return store
 }
 
+func TestReadGmailWatchStateOptionalMatchesLayoutSelection(t *testing.T) {
+	root := t.TempDir()
+	layout := config.Layout{
+		ConfigDir: filepath.Join(root, "config"),
+		StateDir:  filepath.Join(root, "state"),
+	}
+	account := "a@b.com"
+	name := sanitizeAccountForPath(account) + ".json"
+	for path, maxBytes := range map[string]int{
+		filepath.Join(layout.PrimaryGmailWatchDir(), name): 111,
+		filepath.Join(layout.LegacyGmailWatchDir(), name):  222,
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			t.Fatalf("mkdir state: %v", err)
+		}
+		payload, err := json.Marshal(gmailWatchState{
+			Account: account,
+			Hook:    &gmailWatchHook{URL: "https://example.com/hook", MaxBytes: maxBytes},
+		})
+		if err != nil {
+			t.Fatalf("marshal state: %v", err)
+		}
+		if err := os.WriteFile(path, payload, 0o600); err != nil {
+			t.Fatalf("write state: %v", err)
+		}
+	}
+
+	state, found, err := readGmailWatchStateOptionalForLayout(layout, account)
+	if err != nil {
+		t.Fatalf("read optional state: %v", err)
+	}
+	if !found || state.Hook == nil || state.Hook.MaxBytes != 222 {
+		t.Fatalf("state = %#v, found=%t; want legacy layout state", state, found)
+	}
+}
+
 func loadGmailWatchTestStore(t *testing.T, account string) *gmailWatchStore {
 	t.Helper()
 	store, err := loadGmailWatchStoreForLayout(gmailWatchTestLayout(t), account)
