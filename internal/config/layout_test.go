@@ -5,6 +5,8 @@ import (
 	"errors"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 )
 
@@ -147,7 +149,7 @@ func TestResolveLayout(t *testing.T) {
 func TestLayoutResolverIsLazy(t *testing.T) {
 	t.Parallel()
 
-	resolver := newLayoutResolver(
+	resolver := NewResolver(
 		Env{GOGConfigDir: t.TempDir()},
 		UserDirs{
 			GOOS:      "linux",
@@ -156,8 +158,124 @@ func TestLayoutResolverIsLazy(t *testing.T) {
 			CacheDir:  func() (string, error) { return "", errUnexpectedDirectoryLookup },
 		},
 	)
-	if _, err := resolver.resolveKind(PathKindConfig); err != nil {
+	if _, err := resolver.Resolve(PathKindConfig); err != nil {
 		t.Fatalf("resolve config override: %v", err)
+	}
+}
+
+func TestResolverMemoizesAcrossCalls(t *testing.T) {
+	t.Parallel()
+
+	home := t.TempDir()
+	var homeCalls atomic.Int32
+	resolver := NewResolver(Env{}, UserDirs{
+		GOOS: "linux",
+		HomeDir: func() (string, error) {
+			homeCalls.Add(1)
+			return home, nil
+		},
+		ConfigDir: func() (string, error) {
+			return "", errUnexpectedDirectoryLookup
+		},
+		CacheDir: func() (string, error) {
+			return "", errUnexpectedDirectoryLookup
+		},
+	})
+
+	for _, kind := range []PathKind{PathKindData, PathKindState, PathKindData} {
+		if _, err := resolver.Resolve(kind); err != nil {
+			t.Fatalf("Resolve(%v): %v", kind, err)
+		}
+	}
+	if got := homeCalls.Load(); got != 1 {
+		t.Fatalf("home resolver calls = %d, want 1", got)
+	}
+}
+
+func TestResolverConcurrentUse(t *testing.T) {
+	t.Parallel()
+
+	home := t.TempDir()
+	var homeCalls atomic.Int32
+	resolver := NewResolver(Env{GOGHome: "~/gog"}, UserDirs{
+		GOOS: "linux",
+		HomeDir: func() (string, error) {
+			homeCalls.Add(1)
+			return home, nil
+		},
+	})
+
+	const workers = 32
+	var wg sync.WaitGroup
+	errs := make(chan error, workers)
+	for range workers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			layout, err := resolver.Resolve(
+				PathKindConfig,
+				PathKindData,
+				PathKindState,
+				PathKindCache,
+			)
+			if err != nil {
+				errs <- err
+				return
+			}
+			if layout.ConfigDir != filepath.Join(home, "gog", "config") {
+				errs <- errors.New("unexpected config directory")
+			}
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Error(err)
+	}
+	if got := homeCalls.Load(); got != 1 {
+		t.Fatalf("home resolver calls = %d, want 1", got)
+	}
+}
+
+func TestResolverInstancesAreIndependent(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	resolverA := NewResolver(Env{HomeOverride: filepath.Join(root, "a")}, UserDirs{GOOS: "linux"})
+	resolverB := NewResolver(Env{HomeOverride: filepath.Join(root, "b")}, UserDirs{GOOS: "linux"})
+
+	var layoutA, layoutB Layout
+	var errA, errB error
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		layoutA, errA = resolverA.Resolve(PathKindConfig, PathKindData)
+	}()
+	go func() {
+		defer wg.Done()
+		layoutB, errB = resolverB.Resolve(PathKindConfig, PathKindData)
+	}()
+	wg.Wait()
+
+	if errA != nil || errB != nil {
+		t.Fatalf("Resolve: a=%v b=%v", errA, errB)
+	}
+	if layoutA.ConfigDir != filepath.Join(root, "a", "config") {
+		t.Fatalf("resolver A config = %q", layoutA.ConfigDir)
+	}
+	if layoutB.ConfigDir != filepath.Join(root, "b", "config") {
+		t.Fatalf("resolver B config = %q", layoutB.ConfigDir)
+	}
+}
+
+func TestNilResolverFailsClearly(t *testing.T) {
+	t.Parallel()
+
+	var resolver *Resolver
+	_, err := resolver.Resolve(PathKindConfig)
+	if !errors.Is(err, errNilLayoutResolver) {
+		t.Fatalf("Resolve() error = %v, want %v", err, errNilLayoutResolver)
 	}
 }
 
@@ -245,11 +363,11 @@ func TestResolveLayoutMemoizesUserHome(t *testing.T) {
 func TestLayoutResolverRejectsUnknownKindBeforeOverrides(t *testing.T) {
 	t.Parallel()
 
-	resolver := newLayoutResolver(
+	resolver := NewResolver(
 		Env{GOGHome: t.TempDir()},
 		UserDirs{GOOS: "linux"},
 	)
-	_, err := resolver.resolveKind(PathKind(99))
+	_, err := resolver.Resolve(PathKind(99))
 	if err == nil || !strings.Contains(err.Error(), "unknown path kind") {
 		t.Fatalf("error = %v", err)
 	}
@@ -258,7 +376,7 @@ func TestLayoutResolverRejectsUnknownKindBeforeOverrides(t *testing.T) {
 func TestLayoutResolverWrapsHomeExpansionError(t *testing.T) {
 	t.Parallel()
 
-	resolver := newLayoutResolver(
+	resolver := NewResolver(
 		Env{GOGHome: "~"},
 		UserDirs{
 			GOOS:    "linux",
@@ -266,7 +384,7 @@ func TestLayoutResolverWrapsHomeExpansionError(t *testing.T) {
 		},
 	)
 
-	_, err := resolver.resolveKind(PathKindConfig)
+	_, err := resolver.Resolve(PathKindConfig)
 	if err == nil || !strings.Contains(err.Error(), "expand home dir") || !errors.Is(err, errHomeUnavailable) {
 		t.Fatalf("error = %v", err)
 	}

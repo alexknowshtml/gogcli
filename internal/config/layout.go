@@ -8,11 +8,13 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 )
 
 var (
 	errPathMustBeAbsolute   = errors.New("path must be absolute")
 	errUnknownPathKind      = errors.New("unknown path kind")
+	errNilLayoutResolver    = errors.New("layout resolver is nil")
 	errNilHomeDirResolver   = errors.New("home directory resolver is nil")
 	errNilConfigDirResolver = errors.New("config directory resolver is nil")
 	errNilCacheDirResolver  = errors.New("cache directory resolver is nil")
@@ -61,14 +63,47 @@ type UserDirs struct {
 	CacheDir  func() (string, error)
 }
 
+// Resolver captures path-related environment and platform directory lookups
+// for one application runtime. Resolution stays lazy and is safe for
+// concurrent use.
+type Resolver struct {
+	mu       sync.Mutex
+	resolver *layoutResolver
+}
+
+func NewResolver(env Env, dirs UserDirs) *Resolver {
+	return &Resolver{resolver: newLayoutResolver(env, dirs)}
+}
+
+func NewSystemResolver(homeOverride string) *Resolver {
+	env := currentLayoutEnv()
+	if strings.TrimSpace(homeOverride) != "" {
+		env.HomeOverride = homeOverride
+	}
+	return NewResolver(env, systemUserDirs())
+}
+
+func (r *Resolver) Resolve(kinds ...PathKind) (Layout, error) {
+	if r == nil || r.resolver == nil {
+		return Layout{}, errNilLayoutResolver
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	return r.resolver.resolveLayoutFor(kinds...)
+}
+
 func ResolveLayout(env Env, dirs UserDirs) (Layout, error) {
-	resolver := newLayoutResolver(env, dirs)
-	layout, err := resolver.resolveLayoutFor(PathKindConfig, PathKindData, PathKindState, PathKindCache)
+	resolver := NewResolver(env, dirs)
+	layout, err := resolver.Resolve(PathKindConfig, PathKindData, PathKindState, PathKindCache)
 	if err != nil {
 		return Layout{}, err
 	}
 
-	home, _, err := resolver.homeOverride()
+	resolver.mu.Lock()
+	home, _, err := resolver.resolver.homeOverride()
+	resolver.mu.Unlock()
 	if err != nil {
 		return Layout{}, err
 	}
@@ -403,19 +438,19 @@ func systemUserDirs() UserDirs {
 }
 
 func currentLayoutDir(kind PathKind) (string, error) {
-	return newLayoutResolver(currentLayoutEnv(), systemUserDirs()).resolveKind(kind)
+	layout, err := NewSystemResolver(homeOverride).Resolve(kind)
+	if err != nil {
+		return "", err
+	}
+	return layout.Dir(kind)
 }
 
 func currentLayoutFor(kinds ...PathKind) (Layout, error) {
-	return resolveLayoutFor(currentLayoutEnv(), systemUserDirs(), kinds...)
+	return NewSystemResolver(homeOverride).Resolve(kinds...)
 }
 
 func ResolveSystemLayoutFor(homeOverride string, kinds ...PathKind) (Layout, error) {
-	env := currentLayoutEnv()
-	if strings.TrimSpace(homeOverride) != "" {
-		env.HomeOverride = homeOverride
-	}
-	return resolveLayoutFor(env, systemUserDirs(), kinds...)
+	return NewSystemResolver(homeOverride).Resolve(kinds...)
 }
 
 func ResolveUserConfigBase() (string, error) {
@@ -449,8 +484,7 @@ func resolveUserConfigBase(env Env, dirs UserDirs) (string, error) {
 }
 
 func resolveLayoutFor(env Env, dirs UserDirs, kinds ...PathKind) (Layout, error) {
-	resolver := newLayoutResolver(env, dirs)
-	return resolver.resolveLayoutFor(kinds...)
+	return NewResolver(env, dirs).Resolve(kinds...)
 }
 
 func (r *layoutResolver) resolveLayoutFor(kinds ...PathKind) (Layout, error) {
