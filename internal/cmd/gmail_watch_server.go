@@ -25,8 +25,8 @@ var errNoNewMessages = errors.New("no new messages")
 
 const (
 	gmailWatchFormatMetadata  = "metadata"
-	gmailWatchStatusHTTPError = "http_error"
-	gmailWatchStatusRateLimit = "rate_limited"
+	gmailWatchStatusHTTPError = gmailwatch.DeliveryStatusHTTPError
+	gmailWatchStatusRateLimit = gmailwatch.DeliveryStatusRateLimit
 )
 
 type gmailWatchRateLimitError struct {
@@ -55,6 +55,7 @@ type gmailWatchServer struct {
 	excludeLabelIDs map[string]struct{}
 	logf            func(string, ...any)
 	warnf           func(string, ...any)
+	now             func() time.Time
 }
 
 func (s *gmailWatchServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -99,7 +100,7 @@ func (s *gmailWatchServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		var rateErr *gmailWatchRateLimitError
 		if errors.As(err, &rateErr) {
 			if !rateErr.Until.IsZero() {
-				w.Header().Set("Retry-After", retryAfterSeconds(time.Now(), rateErr.Until))
+				w.Header().Set("Retry-After", retryAfterSeconds(s.currentTime(), rateErr.Until))
 			}
 			s.warnf("watch: Gmail rate limit circuit open: %v", err)
 			w.WriteHeader(http.StatusServiceUnavailable)
@@ -180,7 +181,7 @@ func (s *gmailWatchServer) handlePush(ctx context.Context, payload gmailPushPayl
 			return nil, errNoNewMessages
 		}
 	}
-	if err := s.checkRateLimitCircuit(time.Now()); err != nil {
+	if err := s.checkRateLimitCircuit(s.currentTime()); err != nil {
 		return nil, err
 	}
 	startID, err := store.StartHistoryID(payload.HistoryID)
@@ -227,9 +228,7 @@ func (s *gmailWatchServer) handlePush(ctx context.Context, payload gmailPushPayl
 		nextHistoryID = formatHistoryID(historyResp.HistoryId)
 	}
 	if len(s.cfg.HistoryTypes) > 0 && (historyResp == nil || len(historyResp.History) == 0) {
-		if updateErr := store.Update(func(state *gmailWatchState) error {
-			return updateStateAfterHistory(state, nextHistoryID, payload.MessageID)
-		}); updateErr != nil {
+		if updateErr := store.AdvanceHistory(nextHistoryID, payload.MessageID, s.currentTime()); updateErr != nil {
 			s.warnf("watch: failed to update state: %v", updateErr)
 		}
 		return nil, errNoNewMessages
@@ -240,9 +239,7 @@ func (s *gmailWatchServer) handlePush(ctx context.Context, payload gmailPushPayl
 	if err != nil {
 		return nil, s.openRateLimitCircuitIfNeeded(err)
 	}
-	if err := store.Update(func(state *gmailWatchState) error {
-		return updateStateAfterHistory(state, nextHistoryID, payload.MessageID)
-	}); err != nil {
+	if err := store.AdvanceHistory(nextHistoryID, payload.MessageID, s.currentTime()); err != nil {
 		s.warnf("watch: failed to update state: %v", err)
 	}
 
@@ -278,9 +275,7 @@ func (s *gmailWatchServer) resyncHistory(ctx context.Context, svc *gmail.Service
 		return nil, s.openRateLimitCircuitIfNeeded(err)
 	}
 
-	if err := s.store.Update(func(state *gmailWatchState) error {
-		return updateStateAfterHistory(state, historyID, messageID)
-	}); err != nil {
+	if err := s.store.AdvanceHistory(historyID, messageID, s.currentTime()); err != nil {
 		s.warnf("watch: failed to update state after resync: %v", err)
 	}
 
@@ -371,43 +366,26 @@ func (s *gmailWatchServer) checkRateLimitCircuit(now time.Time) error {
 	if s.store == nil {
 		return nil
 	}
-	state := s.store.Get()
-	if state.RateLimitedUntilMs <= 0 {
-		return nil
-	}
-	if state.RateLimitedUntilMs > now.UnixMilli() {
-		return &gmailWatchRateLimitError{Until: time.UnixMilli(state.RateLimitedUntilMs)}
-	}
-	if err := s.store.Update(func(state *gmailWatchState) error {
-		if state.RateLimitedUntilMs > 0 && state.RateLimitedUntilMs <= now.UnixMilli() {
-			state.RateLimitedUntilMs = 0
-			if state.LastDeliveryStatus == gmailWatchStatusRateLimit {
-				state.LastDeliveryStatusNote = ""
-			}
-		}
-		return nil
-	}); err != nil {
+
+	until, open, err := s.store.CheckRateLimit(now)
+	if err != nil {
 		return err
 	}
+	if open {
+		return &gmailWatchRateLimitError{Until: until}
+	}
+
 	return nil
 }
 
 func (s *gmailWatchServer) openRateLimitCircuitIfNeeded(err error) error {
-	until, ok := gmailWatchRateLimitUntil(err, time.Now())
+	now := s.currentTime()
+	until, ok := gmailWatchRateLimitUntil(err, now)
 	if !ok {
 		return err
 	}
 	if s.store != nil {
-		if updateErr := s.store.Update(func(state *gmailWatchState) error {
-			untilMs := until.UnixMilli()
-			if untilMs > state.RateLimitedUntilMs {
-				state.RateLimitedUntilMs = untilMs
-			}
-			state.LastDeliveryStatus = gmailWatchStatusRateLimit
-			state.LastDeliveryAtMs = time.Now().UnixMilli()
-			state.LastDeliveryStatusNote = err.Error()
-			return nil
-		}); updateErr != nil {
+		if updateErr := s.store.OpenRateLimit(until, err.Error(), now); updateErr != nil {
 			s.warnf("watch: failed to update rate limit state: %v", updateErr)
 		}
 	}
@@ -445,30 +423,22 @@ func (s *gmailWatchServer) sendHook(ctx context.Context, payload *gmailHookPaylo
 	}
 	resp, err := s.hookClient.Do(req)
 	if err != nil {
-		_ = s.store.Update(func(state *gmailWatchState) error {
-			state.LastDeliveryStatus = literalError
-			state.LastDeliveryAtMs = time.Now().UnixMilli()
-			state.LastDeliveryStatusNote = err.Error()
-			return nil
-		})
+		_ = s.store.RecordDelivery(gmailwatch.DeliveryStatusError, err.Error(), s.currentTime())
+
 		return err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		_ = s.store.Update(func(state *gmailWatchState) error {
-			state.LastDeliveryStatus = gmailWatchStatusHTTPError
-			state.LastDeliveryAtMs = time.Now().UnixMilli()
-			state.LastDeliveryStatusNote = fmt.Sprintf("status %d", resp.StatusCode)
-			return nil
-		})
+		_ = s.store.RecordDelivery(
+			gmailwatch.DeliveryStatusHTTPError,
+			fmt.Sprintf("status %d", resp.StatusCode),
+			s.currentTime(),
+		)
+
 		return fmt.Errorf("hook status %d", resp.StatusCode)
 	}
-	_ = s.store.Update(func(state *gmailWatchState) error {
-		state.LastDeliveryStatus = "ok"
-		state.LastDeliveryAtMs = time.Now().UnixMilli()
-		state.LastDeliveryStatusNote = ""
-		return nil
-	})
+	_ = s.store.RecordDelivery(gmailwatch.DeliveryStatusOK, "", s.currentTime())
+
 	return nil
 }
 
@@ -565,10 +535,12 @@ func pathMatches(expected, actual string) bool {
 	return strings.HasPrefix(actual, expected+"/")
 }
 
-// updateStateAfterHistory updates the stored state with the new history ID and push message ID.
-// This is a common operation after processing history, whether messages were found or not.
-func updateStateAfterHistory(state *gmailWatchState, historyID, pushMessageID string) error {
-	return gmailwatch.AdvanceHistory(state, historyID, pushMessageID, time.Now())
+func (s *gmailWatchServer) currentTime() time.Time {
+	if s.now != nil {
+		return s.now()
+	}
+
+	return time.Now()
 }
 
 func isStaleHistoryError(err error) bool {

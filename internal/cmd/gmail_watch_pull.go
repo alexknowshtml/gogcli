@@ -14,7 +14,6 @@ import (
 	"google.golang.org/api/gmail/v1"
 
 	"github.com/steipete/gogcli/internal/authclient"
-	"github.com/steipete/gogcli/internal/gmailwatch"
 	"github.com/steipete/gogcli/internal/ui"
 )
 
@@ -94,11 +93,7 @@ func (c *GmailWatchPullCmd) Run(ctx context.Context, kctx *kong.Context, flags *
 		return err
 	}
 	if c.SaveHook && hook != nil {
-		if updateErr := store.Update(func(s *gmailWatchState) error {
-			s.Hook = hook
-			s.UpdatedAtMs = time.Now().UnixMilli()
-			return nil
-		}); updateErr != nil {
+		if updateErr := store.SetHook(hook, time.Now()); updateErr != nil {
 			return updateErr
 		}
 	}
@@ -333,9 +328,8 @@ func (s *gmailWatchServer) restoreWatchProgressForRetry(before gmailWatchState, 
 	if s.store == nil {
 		return nil
 	}
-	return s.store.Update(func(state *gmailWatchState) error {
-		gmailwatch.RestoreProgress(state, before, historyID, pushMessageID)
 
-		return nil
-	})
+	_, err := s.store.RestoreProgress(before, historyID, pushMessageID)
+
+	return err
 }
