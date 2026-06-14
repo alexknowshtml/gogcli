@@ -2,6 +2,10 @@
 
 ## 0.26.1 - Unreleased
 
+### Added
+
+- YouTube: add `playlists items list` for public and private playlist contents with pagination, and `videos list --my-rating like|dislike` for authenticated rating history. (#787) — thanks @coeur-de-loup.
+
 ### Fixed
 
 - Docs: reject ambiguous `docs cat --tab ... --all-tabs` and MCP `docs_get` requests before contacting the Docs API. (#801) — thanks @kiranmagic7.
