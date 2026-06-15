@@ -128,7 +128,7 @@ func TestExecute_Schema_GmailTruncationHelp(t *testing.T) {
 		t.Fatalf("messages search --full help = %q", messagesFull.Help)
 	}
 	includeBody := schemaFlagByName(t, messagesDoc.Command, "include-body")
-	if includeBody.Help != "Include decoded message body (JSON is full; text output is truncated)" {
+	if includeBody.Help != "Include decoded message body (JSON is full; text output truncates only unusually large bodies)" {
 		t.Fatalf("messages search --include-body help = %q", includeBody.Help)
 	}
 }

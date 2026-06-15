@@ -2,6 +2,10 @@
 
 ## 0.27.2 - Unreleased
 
+### Changed
+
+- Gmail: show ordinary message bodies in full by default in text output, retain a generous cap for unusually large messages, and point truncated output to `--full` or `--json`. (#807) — thanks @privatenumber.
+
 ## 0.27.1 - 2026-06-15
 
 ### Fixed

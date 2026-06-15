@@ -14,25 +14,33 @@ import (
 )
 
 func TestSanitizeMessageBody_TruncateUTF8(t *testing.T) {
-	long := strings.Repeat("€", 210)
+	long := strings.Repeat("€", gmailDefaultTextBodyLimit+10)
 	got := sanitizeMessageBody(long, false)
 	if !strings.HasSuffix(got, gmailTextTruncationMarker) {
 		t.Fatalf("expected truncation suffix, got %q", got)
 	}
 	preview := strings.TrimSuffix(got, gmailTextTruncationMarker)
-	if len([]rune(preview)) != 200 {
-		t.Fatalf("expected 200 preview runes, got %d", len([]rune(preview)))
+	if len([]rune(preview)) != gmailDefaultTextBodyLimit {
+		t.Fatalf("expected %d preview runes, got %d", gmailDefaultTextBodyLimit, len([]rune(preview)))
 	}
 }
 
 func TestSanitizeMessageBody_FullSkipsTruncation(t *testing.T) {
-	long := strings.Repeat("€", 210)
+	long := strings.Repeat("€", gmailDefaultTextBodyLimit+10)
 	got := sanitizeMessageBody(long, true)
 	if strings.Contains(got, "[truncated") {
 		t.Fatalf("expected no truncation with full=true, got %q", got)
 	}
-	if len([]rune(got)) != 210 {
-		t.Fatalf("expected 210 runes, got %d", len([]rune(got)))
+	if len([]rune(got)) != gmailDefaultTextBodyLimit+10 {
+		t.Fatalf("expected %d runes, got %d", gmailDefaultTextBodyLimit+10, len([]rune(got)))
+	}
+}
+
+func TestSanitizeMessageBody_DefaultShowsTypicalBody(t *testing.T) {
+	body := strings.Repeat("ordinary message body ", 500)
+	got := sanitizeMessageBody(body, false)
+	if got != strings.TrimSpace(body) {
+		t.Fatalf("expected ordinary body in full, got %q", got)
 	}
 }
 

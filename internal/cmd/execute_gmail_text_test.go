@@ -89,7 +89,7 @@ func TestExecute_GmailThread_Text_Download(t *testing.T) {
 func TestExecute_GmailThread_Text_FullFlag(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 
-	longBody := strings.Repeat("a", 600)
+	longBody := strings.Repeat("a", gmailDefaultTextBodyLimit+100)
 	bodyEncoded := base64.RawURLEncoding.EncodeToString([]byte(longBody))
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

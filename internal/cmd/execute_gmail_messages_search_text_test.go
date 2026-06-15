@@ -200,7 +200,7 @@ func TestExecute_GmailMessagesSearch_JSON_IncludeBody(t *testing.T) {
 }
 
 func TestExecute_GmailMessagesSearch_Text_IncludeBodyTruncationDiscoverable(t *testing.T) {
-	longBody := strings.Repeat("b", 240)
+	longBody := strings.Repeat("b", gmailDefaultTextBodyLimit+40)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 		switch {
@@ -256,7 +256,7 @@ func TestExecute_GmailMessagesSearch_Text_IncludeBodyTruncationDiscoverable(t *t
 	if defaultResult.err != nil {
 		t.Fatalf("Execute: %v\nstderr=%q", defaultResult.err, defaultResult.stderr)
 	}
-	if !strings.Contains(defaultResult.stdout, strings.Repeat("b", 200)+gmailTextTruncationMarker) {
+	if !strings.Contains(defaultResult.stdout, strings.Repeat("b", gmailDefaultTextBodyLimit)+gmailTextTruncationMarker) {
 		t.Fatalf("expected actionable truncation marker, got: %q", defaultResult.stdout)
 	}
 	if strings.Contains(defaultResult.stdout, longBody) {

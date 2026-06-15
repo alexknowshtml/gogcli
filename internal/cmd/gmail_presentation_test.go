@@ -50,7 +50,7 @@ func TestGmailPresentationSchemas(t *testing.T) {
 
 	t.Run("messages with body", func(t *testing.T) {
 		t.Parallel()
-		body := strings.Repeat("x", 201) + "\nmore"
+		body := strings.Repeat("x", gmailDefaultTextBodyLimit+1) + "\nmore"
 		got := renderPlainTable(t, []messageItem{{
 			ID:   "m1",
 			Body: body,
@@ -59,7 +59,7 @@ func TestGmailPresentationSchemas(t *testing.T) {
 			t,
 			got,
 			"ID\tTHREAD\tDATE\tFROM\tSUBJECT\tLABELS\tBODY\n"+
-				"m1\t\t\t\t\t\t"+strings.Repeat("x", 200)+gmailTextTruncationMarker+"\n",
+				"m1\t\t\t\t\t\t"+strings.Repeat("x", gmailDefaultTextBodyLimit)+gmailTextTruncationMarker+"\n",
 		)
 	})
 

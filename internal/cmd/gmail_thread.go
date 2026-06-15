@@ -126,11 +126,9 @@ func (c *GmailThreadGetCmd) Run(ctx context.Context, flags *RootFlags) error {
 			} else if isHTML {
 				cleanBody = gmailcontent.StripHTMLTags(body)
 			}
-			// Limit body preview to avoid overwhelming output
-			// Use runes to avoid breaking multi-byte UTF-8 characters
-			runes := []rune(cleanBody)
-			if len(runes) > 500 && !c.Full {
-				cleanBody = string(runes[:500]) + gmailTextTruncationMarker
+			// Keep unusually large bodies bounded without turning normal messages into previews.
+			if !c.Full {
+				cleanBody = truncateRunes(cleanBody, gmailDefaultTextBodyLimit)
 			}
 			u.Out().Println(cleanBody)
 			u.Out().Println("")

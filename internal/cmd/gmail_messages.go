@@ -17,6 +17,7 @@ import (
 const (
 	gmailMessageBodyFormatText = "text"
 	gmailMessageBodyFormatHTML = "html"
+	gmailDefaultTextBodyLimit  = 20_000
 	gmailTextTruncationMarker  = "... [truncated; use --full or --json]"
 )
 
@@ -33,7 +34,7 @@ type GmailMessagesSearchCmd struct {
 	FailEmpty   bool     `name:"fail-empty" aliases:"non-empty,require-results" help:"Exit with code 3 if no results"`
 	Timezone    string   `name:"timezone" short:"z" help:"Output timezone (IANA name, e.g. America/New_York, UTC). Default: GOG_TIMEZONE, config, then local"`
 	Local       bool     `name:"local" help:"Use local timezone (default behavior, useful to override --timezone)"`
-	IncludeBody bool     `name:"include-body" help:"Include decoded message body (JSON is full; text output is truncated)"`
+	IncludeBody bool     `name:"include-body" help:"Include decoded message body (JSON is full; text output truncates only unusually large bodies)"`
 	BodyFormat  string   `name:"body-format" help:"Body format preference when --include-body is set: text or html" default:"text" enum:"text,html"`
 	Full        bool     `name:"full" help:"Show full message bodies without truncation (implies --include-body)"`
 }
@@ -326,7 +327,7 @@ func sanitizeMessageBody(body string, full bool) string {
 	if full {
 		return body
 	}
-	return truncateRunes(body, 200)
+	return truncateRunes(body, gmailDefaultTextBodyLimit)
 }
 
 func truncateRunes(s string, maxLen int) string {
