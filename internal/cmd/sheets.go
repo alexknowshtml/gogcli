@@ -155,6 +155,8 @@ type SheetsUpdateCmd struct {
 	ValueInput         string   `name:"input" help:"Value input option: RAW or USER_ENTERED" default:"USER_ENTERED"`
 	ValuesJSON         string   `name:"values-json" help:"Values as JSON 2D array"`
 	CopyValidationFrom string   `name:"copy-validation-from" help:"Copy data validation from an A1 range or named range (e.g. 'Sheet1!A2:D2' or MyNamedRange) to the updated cells"`
+	SafeFormula        string   `name:"safe-formula" help:"Path to file containing a formula; avoids shell ! expansion and forces USER_ENTERED mode"`
+	Verify             bool     `name:"verify" help:"After write, read the cell back and warn if it contains a spreadsheet error (e.g. #ERROR!, #REF!, #NAME?)"`
 }
 
 func (c *SheetsUpdateCmd) Run(ctx context.Context, flags *RootFlags) error {
@@ -170,8 +172,16 @@ func (c *SheetsUpdateCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	var values [][]interface{}
+	safeFormulaUsed := false
 
 	switch {
+	case strings.TrimSpace(c.SafeFormula) != "":
+		content, readErr := os.ReadFile(c.SafeFormula)
+		if readErr != nil {
+			return fmt.Errorf("read --safe-formula file: %w", readErr)
+		}
+		values = [][]interface{}{{strings.TrimSpace(string(content))}}
+		safeFormulaUsed = true
 	case strings.TrimSpace(c.ValuesJSON) != "":
 		b, err := resolveInlineOrFileBytes(c.ValuesJSON)
 		if err != nil {
@@ -197,7 +207,7 @@ func (c *SheetsUpdateCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	valueInputOption := strings.TrimSpace(c.ValueInput)
-	if valueInputOption == "" {
+	if valueInputOption == "" || safeFormulaUsed {
 		valueInputOption = "USER_ENTERED"
 	}
 
@@ -240,6 +250,26 @@ func (c *SheetsUpdateCmd) Run(ctx context.Context, flags *RootFlags) error {
 		}
 		if err := copyDataValidation(ctx, svc, spreadsheetID, c.CopyValidationFrom, resp.UpdatedRange); err != nil {
 			return err
+		}
+	}
+
+	if c.Verify && strings.TrimSpace(resp.UpdatedRange) != "" {
+		getResp, getErr := svc.Spreadsheets.Values.Get(spreadsheetID, resp.UpdatedRange).
+			ValueRenderOption("FORMATTED_VALUE").Do()
+		if getErr != nil {
+			u.Err().Errorf("--verify: failed to read back cell: %v", getErr)
+		} else {
+			errorTokens := []string{"#ERROR!", "#REF!", "#NAME?", "#VALUE!", "#DIV/0!", "#N/A", "#NUM!"}
+			for _, row := range getResp.Values {
+				for _, cell := range row {
+					val := fmt.Sprintf("%v", cell)
+					for _, token := range errorTokens {
+						if strings.Contains(val, token) {
+							u.Err().Printf("--verify: cell %s contains spreadsheet error: %s", resp.UpdatedRange, val)
+						}
+					}
+				}
+			}
 		}
 	}
 
