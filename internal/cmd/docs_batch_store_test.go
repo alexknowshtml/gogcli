@@ -148,43 +148,21 @@ func TestBatchEndContinueOnErrorRetainsFailedRequests(t *testing.T) {
 }
 
 func TestBatchEndContinueOnErrorPersistsProgressBeforeMissingRevisionError(t *testing.T) {
-	store, state, ctx := prepareDocsBatchEndTest(t, 2)
-
-	calls := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		calls++
-		if calls == 1 {
-			w.WriteHeader(http.StatusBadRequest)
-			_, _ = fmt.Fprint(w, `{"error":{"code":400,"message":"invalid request","status":"INVALID_ARGUMENT"}}`)
-
-			return
-		}
-		_, _ = fmt.Fprint(w, `{"documentId":"doc1"}`)
-	}))
-	defer server.Close()
-	ctx = withDocsBatchHTTPTest(t, ctx, server)
-
-	err := (&BatchEndCmd{BatchID: state.BatchID, ContinueOnError: true}).Run(ctx, &RootFlags{})
-	if err == nil || !strings.Contains(err.Error(), "omitted the revision") {
-		t.Fatalf("error = %v", err)
-	}
-
-	loaded, err := store.Get(state.BatchID)
-	if err != nil {
-		t.Fatalf("get retained state: %v", err)
-	}
-	if len(loaded.Requests) != 1 || !compactJSONContains(t, loaded.Requests[0].Request, `"text":"request-1"`) {
-		t.Fatalf("retained requests = %#v", loaded.Requests)
-	}
+	assertBatchEndMissingRevision(t, 1, `"text":"request-1"`)
 }
 
 func TestBatchEndContinueOnErrorRequiresRevisionForEarlierFailure(t *testing.T) {
+	assertBatchEndMissingRevision(t, 2, `"text":"request-0"`)
+}
+
+func assertBatchEndMissingRevision(t *testing.T, failedCalls int, retainedText string) {
+	t.Helper()
 	store, state, ctx := prepareDocsBatchEndTest(t, 2)
 
 	calls := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		calls++
-		if calls <= 2 {
+		if calls <= failedCalls {
 			w.WriteHeader(http.StatusBadRequest)
 			_, _ = fmt.Fprint(w, `{"error":{"code":400,"message":"invalid request","status":"INVALID_ARGUMENT"}}`)
 
@@ -204,7 +182,7 @@ func TestBatchEndContinueOnErrorRequiresRevisionForEarlierFailure(t *testing.T) 
 	if err != nil {
 		t.Fatalf("get retained state: %v", err)
 	}
-	if len(loaded.Requests) != 1 || !compactJSONContains(t, loaded.Requests[0].Request, `"text":"request-0"`) {
+	if len(loaded.Requests) != 1 || !compactJSONContains(t, loaded.Requests[0].Request, retainedText) {
 		t.Fatalf("retained requests = %#v", loaded.Requests)
 	}
 }

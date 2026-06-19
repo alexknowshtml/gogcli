@@ -17,6 +17,73 @@ import (
 	"github.com/steipete/gogcli/internal/mailmime"
 )
 
+type gmailQuoteSource struct {
+	MessageID  string
+	ThreadID   string
+	References string
+	From       string
+	Date       string
+	Plain      string
+	HTML       string
+}
+
+func writeGmailQuoteSource(w http.ResponseWriter, source gmailQuoteSource) {
+	parts := []map[string]any{{
+		"mimeType": "text/plain",
+		"body":     map[string]any{"data": base64.RawURLEncoding.EncodeToString([]byte(source.Plain))},
+	}}
+	if source.HTML != "" {
+		parts = append(parts, map[string]any{
+			"mimeType": "text/html",
+			"body":     map[string]any{"data": base64.RawURLEncoding.EncodeToString([]byte(source.HTML))},
+		})
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"id": source.MessageID, "threadId": source.ThreadID,
+		"payload": map[string]any{
+			"mimeType": "multipart/alternative",
+			"headers": []map[string]any{
+				{"name": "Message-ID", "value": "<" + source.MessageID + "@example.com>"},
+				{"name": "References", "value": source.References},
+				{"name": "From", "value": source.From},
+				{"name": "Date", "value": source.Date},
+			},
+			"parts": parts,
+		},
+	})
+}
+
+func readGmailDraftRaw(t *testing.T, r *http.Request, wantThreadID string) string {
+	t.Helper()
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+	var draft gmail.Draft
+	if err := json.Unmarshal(body, &draft); err != nil {
+		t.Fatalf("unmarshal: %v body=%q", err, string(body))
+	}
+	if draft.Message == nil {
+		t.Fatal("expected draft message")
+	}
+	if draft.Message.ThreadId != wantThreadID {
+		t.Fatalf("threadId = %q, want %q", draft.Message.ThreadId, wantThreadID)
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(draft.Message.Raw)
+	if err != nil {
+		t.Fatalf("decode raw: %v", err)
+	}
+	return string(raw)
+}
+
+func writeGmailDraftResponse(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"id": "d1", "message": map[string]any{"id": "m2", "threadId": "t1"},
+	})
+}
+
 func TestGmailDraftsListCmd_TextAndJSON(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/gmail/v1/users/me/drafts") && r.Method == http.MethodGet {
@@ -449,55 +516,14 @@ func TestGmailDraftsCreateCmd_WithQuote(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case strings.Contains(r.URL.Path, "/gmail/v1/users/me/messages/m1") && r.Method == http.MethodGet:
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"id":       "m1",
-				"threadId": "t1",
-				"payload": map[string]any{
-					"mimeType": "multipart/alternative",
-					"headers": []map[string]any{
-						{"name": "Message-ID", "value": "<msg@id>"},
-						{"name": "References", "value": "<ref@id>"},
-						{"name": "From", "value": "Alice <alice@example.com>"},
-						{"name": "Date", "value": "Mon, 1 Jan 2024 00:00:00 +0000"},
-					},
-					"parts": []map[string]any{
-						{
-							"mimeType": "text/plain",
-							"body": map[string]any{
-								"data": base64.RawURLEncoding.EncodeToString([]byte(originalPlain)),
-							},
-						},
-						{
-							"mimeType": "text/html",
-							"body": map[string]any{
-								"data": base64.RawURLEncoding.EncodeToString([]byte(originalHTML)),
-							},
-						},
-					},
-				},
+			writeGmailQuoteSource(w, gmailQuoteSource{
+				MessageID: "m1", ThreadID: "t1", References: "<ref@id>",
+				From: "Alice <alice@example.com>", Date: "Mon, 1 Jan 2024 00:00:00 +0000",
+				Plain: originalPlain, HTML: originalHTML,
 			})
 			return
 		case strings.Contains(r.URL.Path, "/gmail/v1/users/me/drafts") && r.Method == http.MethodPost:
-			body, err := io.ReadAll(r.Body)
-			if err != nil {
-				t.Fatalf("ReadAll: %v", err)
-			}
-			var draft gmail.Draft
-			if unmarshalErr := json.Unmarshal(body, &draft); unmarshalErr != nil {
-				t.Fatalf("unmarshal: %v body=%q", unmarshalErr, string(body))
-			}
-			if draft.Message == nil {
-				t.Fatalf("expected message in create")
-			}
-			if draft.Message.ThreadId != "t1" {
-				t.Fatalf("expected threadId t1, got %q", draft.Message.ThreadId)
-			}
-			raw, err := base64.RawURLEncoding.DecodeString(draft.Message.Raw)
-			if err != nil {
-				t.Fatalf("decode raw: %v", err)
-			}
-			s := string(raw)
+			s := readGmailDraftRaw(t, r, "t1")
 			if !strings.Contains(s, "Hello reply") {
 				t.Fatalf("missing body in raw:\n%s", s)
 			}
@@ -510,14 +536,7 @@ func TestGmailDraftsCreateCmd_WithQuote(t *testing.T) {
 			if !strings.Contains(s, "gmail_quote") {
 				t.Fatalf("missing quoted html block in raw:\n%s", s)
 			}
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"id": "d1",
-				"message": map[string]any{
-					"id":       "m2",
-					"threadId": "t1",
-				},
-			})
+			writeGmailDraftResponse(w)
 			return
 		default:
 			http.NotFound(w, r)
@@ -1143,27 +1162,10 @@ func TestGmailDraftsUpdateCmd_WithQuoteAndReplyToMessageID(t *testing.T) {
 			if got := r.URL.Query().Get("format"); got != gmailFormatFull {
 				t.Fatalf("expected format=%s, got %q", gmailFormatFull, got)
 			}
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"id":       "m1",
-				"threadId": "t1",
-				"payload": map[string]any{
-					"mimeType": "multipart/alternative",
-					"headers": []map[string]any{
-						{"name": "Message-ID", "value": "<m1@example.com>"},
-						{"name": "References", "value": "<ref@example.com>"},
-						{"name": "From", "value": "Carol <carol@example.com>"},
-						{"name": "Date", "value": "Wed, 3 Jan 2024 06:07:08 +0000"},
-					},
-					"parts": []map[string]any{
-						{
-							"mimeType": "text/plain",
-							"body": map[string]any{
-								"data": base64.RawURLEncoding.EncodeToString([]byte(originalPlain)),
-							},
-						},
-					},
-				},
+			writeGmailQuoteSource(w, gmailQuoteSource{
+				MessageID: "m1", ThreadID: "t1", References: "<ref@example.com>",
+				From: "Carol <carol@example.com>", Date: "Wed, 3 Jan 2024 06:07:08 +0000",
+				Plain: originalPlain,
 			})
 			return
 		case strings.Contains(r.URL.Path, "/gmail/v1/users/me/drafts/d1") && r.Method == http.MethodGet:
@@ -1176,25 +1178,7 @@ func TestGmailDraftsUpdateCmd_WithQuoteAndReplyToMessageID(t *testing.T) {
 			})
 			return
 		case strings.Contains(r.URL.Path, "/gmail/v1/users/me/drafts/d1") && r.Method == http.MethodPut:
-			body, err := io.ReadAll(r.Body)
-			if err != nil {
-				t.Fatalf("ReadAll: %v", err)
-			}
-			var draft gmail.Draft
-			if unmarshalErr := json.Unmarshal(body, &draft); unmarshalErr != nil {
-				t.Fatalf("unmarshal: %v body=%q", unmarshalErr, string(body))
-			}
-			if draft.Message == nil {
-				t.Fatalf("expected message in update")
-			}
-			if draft.Message.ThreadId != "t1" {
-				t.Fatalf("expected threadId t1, got %q", draft.Message.ThreadId)
-			}
-			raw, err := base64.RawURLEncoding.DecodeString(draft.Message.Raw)
-			if err != nil {
-				t.Fatalf("decode raw: %v", err)
-			}
-			s := string(raw)
+			s := readGmailDraftRaw(t, r, "t1")
 			if !strings.Contains(s, "To: keep@example.com\r\n") {
 				t.Fatalf("missing To in raw:\n%s", s)
 			}
@@ -1207,11 +1191,7 @@ func TestGmailDraftsUpdateCmd_WithQuoteAndReplyToMessageID(t *testing.T) {
 			if !strings.Contains(s, "> Quoted from explicit message id") {
 				t.Fatalf("missing quoted plain body in raw:\n%s", s)
 			}
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"id":      "d1",
-				"message": map[string]any{"id": "m2", "threadId": "t1"},
-			})
+			writeGmailDraftResponse(w)
 			return
 		default:
 			http.NotFound(w, r)

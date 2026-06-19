@@ -16,6 +16,46 @@ import (
 	"google.golang.org/api/option"
 )
 
+func docsCreateCopyCatHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		drivePath := strings.TrimPrefix(path, "/drive/v3")
+		switch {
+		case strings.HasPrefix(path, "/v1/documents/") && r.Method == http.MethodGet:
+			id := strings.TrimPrefix(path, "/v1/documents/")
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"documentId": id,
+				"title":      "Doc",
+				"body": map[string]any{"content": []any{map[string]any{
+					"paragraph": map[string]any{"elements": []any{map[string]any{
+						"textRun": map[string]any{"content": "doc text"},
+					}}},
+				}}},
+			})
+		case strings.HasPrefix(drivePath, "/files/") && r.Method == http.MethodGet:
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"id": "doc1", "mimeType": "application/vnd.google-apps.document",
+			})
+		case drivePath == "/files" && r.Method == http.MethodPost:
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"id": "doc1", "name": "Doc", "mimeType": "application/vnd.google-apps.document",
+				"webViewLink": "http://example.com/doc1",
+			})
+		case strings.Contains(drivePath, "/files/doc1/copy") && r.Method == http.MethodPost:
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"id": "doc2", "name": "Copy", "mimeType": "application/vnd.google-apps.document",
+				"webViewLink": "http://example.com/doc2",
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	})
+}
+
 func TestDocsCreateCopyCat_JSON(t *testing.T) {
 	t.Parallel()
 
@@ -26,63 +66,7 @@ func TestDocsCreateCopyCat_JSON(t *testing.T) {
 		}, nil
 	}
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path
-		drivePath := strings.TrimPrefix(path, "/drive/v3")
-		switch {
-		case strings.HasPrefix(path, "/v1/documents/") && r.Method == http.MethodGet:
-			id := strings.TrimPrefix(path, "/v1/documents/")
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"documentId": id,
-				"title":      "Doc",
-				"body": map[string]any{
-					"content": []any{
-						map[string]any{
-							"paragraph": map[string]any{
-								"elements": []any{
-									map[string]any{
-										"textRun": map[string]any{
-											"content": "doc text",
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			})
-			return
-		case strings.HasPrefix(drivePath, "/files/") && r.Method == http.MethodGet:
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"id":       "doc1",
-				"mimeType": "application/vnd.google-apps.document",
-			})
-			return
-		case drivePath == "/files" && r.Method == http.MethodPost:
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"id":          "doc1",
-				"name":        "Doc",
-				"mimeType":    "application/vnd.google-apps.document",
-				"webViewLink": "http://example.com/doc1",
-			})
-			return
-		case strings.Contains(drivePath, "/files/doc1/copy") && r.Method == http.MethodPost:
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"id":          "doc2",
-				"name":        "Copy",
-				"mimeType":    "application/vnd.google-apps.document",
-				"webViewLink": "http://example.com/doc2",
-			})
-			return
-		default:
-			http.NotFound(w, r)
-			return
-		}
-	}))
+	srv := httptest.NewServer(docsCreateCopyCatHandler())
 	defer srv.Close()
 
 	svc, err := drive.NewService(context.Background(),
@@ -733,63 +717,7 @@ func TestDocsCreateCopyCat_Text(t *testing.T) {
 		}, nil
 	}
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path
-		drivePath := strings.TrimPrefix(path, "/drive/v3")
-		switch {
-		case strings.HasPrefix(path, "/v1/documents/") && r.Method == http.MethodGet:
-			id := strings.TrimPrefix(path, "/v1/documents/")
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"documentId": id,
-				"title":      "Doc",
-				"body": map[string]any{
-					"content": []any{
-						map[string]any{
-							"paragraph": map[string]any{
-								"elements": []any{
-									map[string]any{
-										"textRun": map[string]any{
-											"content": "doc text",
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			})
-			return
-		case strings.HasPrefix(drivePath, "/files/") && r.Method == http.MethodGet:
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"id":       "doc1",
-				"mimeType": "application/vnd.google-apps.document",
-			})
-			return
-		case drivePath == "/files" && r.Method == http.MethodPost:
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"id":          "doc1",
-				"name":        "Doc",
-				"mimeType":    "application/vnd.google-apps.document",
-				"webViewLink": "http://example.com/doc1",
-			})
-			return
-		case strings.Contains(drivePath, "/files/doc1/copy") && r.Method == http.MethodPost:
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"id":          "doc2",
-				"name":        "Copy",
-				"mimeType":    "application/vnd.google-apps.document",
-				"webViewLink": "http://example.com/doc2",
-			})
-			return
-		default:
-			http.NotFound(w, r)
-			return
-		}
-	}))
+	srv := httptest.NewServer(docsCreateCopyCatHandler())
 	defer srv.Close()
 
 	svc, err := drive.NewService(context.Background(),
