@@ -120,49 +120,15 @@ func TestAuthorize_MissingScopes(t *testing.T) {
 }
 
 func TestAuthorize_Manual_Success(t *testing.T) {
-	origRead := readClientCredentials
-	origEndpoint := oauthEndpoint
-	origState := randomStateFn
-
-	t.Cleanup(func() {
-		readClientCredentials = origRead
-		oauthEndpoint = origEndpoint
-		randomStateFn = origState
-	})
-
-	stateStore := newTestManualStateStore(t)
-
-	readClientCredentials = func(string) (config.ClientCredentials, error) {
-		return config.ClientCredentials{ClientID: "id", ClientSecret: "secret"}, nil
-	}
-	randomStateFn = func() (string, error) { return "state123", nil }
-
-	useManualRedirectURI(t)
-
-	tokenSrv := newTokenServer(t)
-	defer tokenSrv.Close()
-	oauthEndpoint = oauth2EndpointForTest(tokenSrv.URL)
-
-	w := useStdinPipe(t)
-	_, _ = w.WriteString("http://127.0.0.1:55555/oauth2/callback?code=abc&state=state123\n")
-	_ = w.Close()
-
-	rt, err := Authorize(context.Background(), AuthorizeOptions{
-		Scopes:           []string{"s1"},
-		Manual:           true,
-		Timeout:          2 * time.Second,
-		ManualStateStore: stateStore,
-	})
-	if err != nil {
-		t.Fatalf("Authorize: %v", err)
-	}
-
-	if rt != "rt" {
-		t.Fatalf("unexpected refresh token: %q", rt)
-	}
+	assertAuthorizeManualSuccess(t, "\n")
 }
 
 func TestAuthorize_Manual_Success_NoNewline(t *testing.T) {
+	assertAuthorizeManualSuccess(t, "")
+}
+
+func assertAuthorizeManualSuccess(t *testing.T, suffix string) {
+	t.Helper()
 	origRead := readClientCredentials
 	origEndpoint := oauthEndpoint
 	origState := randomStateFn
@@ -172,6 +138,7 @@ func TestAuthorize_Manual_Success_NoNewline(t *testing.T) {
 		oauthEndpoint = origEndpoint
 		randomStateFn = origState
 	})
+
 	stateStore := newTestManualStateStore(t)
 
 	readClientCredentials = func(string) (config.ClientCredentials, error) {
@@ -186,7 +153,7 @@ func TestAuthorize_Manual_Success_NoNewline(t *testing.T) {
 	oauthEndpoint = oauth2EndpointForTest(tokenSrv.URL)
 
 	w := useStdinPipe(t)
-	_, _ = w.WriteString("http://127.0.0.1:55555/oauth2/callback?code=abc&state=state123")
+	_, _ = w.WriteString("http://127.0.0.1:55555/oauth2/callback?code=abc&state=state123" + suffix)
 	_ = w.Close()
 
 	rt, err := Authorize(context.Background(), AuthorizeOptions{

@@ -237,42 +237,19 @@ func TestResolveKeyringBackendInfo_Default(t *testing.T) {
 }
 
 func TestResolveKeyringBackendInfo_Config(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "xdg-config"))
-	t.Setenv("GOG_KEYRING_BACKEND", "")
-
-	layout := testSystemLayout(t, config.PathKindConfig)
-	store := config.NewConfigStore(layout)
-	path := store.Path()
-
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-
-	if err := os.WriteFile(path, []byte(`{ keyring_backend: "file" }`), 0o600); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
-
-	info, err := ResolveKeyringBackendInfoWithOptions(systemTestOpenOptions(layout, store))
-	if err != nil {
-		t.Fatalf("ResolveKeyringBackendInfo: %v", err)
-	}
-
-	if info.Value != "file" {
-		t.Fatalf("expected file, got %q", info.Value)
-	}
-
-	if info.Source != keyringBackendSourceConfig {
-		t.Fatalf("expected source config, got %q", info.Source)
-	}
+	assertResolveKeyringBackendConfig(t, "", "file", keyringBackendSourceConfig)
 }
 
 func TestResolveKeyringBackendInfo_EnvOverridesConfig(t *testing.T) {
+	assertResolveKeyringBackendConfig(t, "keychain", "keychain", keyringBackendSourceEnv)
+}
+
+func assertResolveKeyringBackendConfig(t *testing.T, envValue, wantValue, wantSource string) {
+	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "xdg-config"))
-	t.Setenv("GOG_KEYRING_BACKEND", "keychain")
+	t.Setenv("GOG_KEYRING_BACKEND", envValue)
 
 	layout := testSystemLayout(t, config.PathKindConfig)
 	store := config.NewConfigStore(layout)
@@ -291,12 +268,12 @@ func TestResolveKeyringBackendInfo_EnvOverridesConfig(t *testing.T) {
 		t.Fatalf("ResolveKeyringBackendInfo: %v", err)
 	}
 
-	if info.Value != "keychain" {
-		t.Fatalf("expected keychain, got %q", info.Value)
+	if info.Value != wantValue {
+		t.Fatalf("expected %s, got %q", wantValue, info.Value)
 	}
 
-	if info.Source != keyringBackendSourceEnv {
-		t.Fatalf("expected source env, got %q", info.Source)
+	if info.Source != wantSource {
+		t.Fatalf("expected source %s, got %q", wantSource, info.Source)
 	}
 }
 
