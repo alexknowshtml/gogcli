@@ -363,6 +363,7 @@ Docs: [Sheets batch updates](docs/sheets-batch-update.md),
 
 ```bash
 gog sheets get <spreadsheetId> 'Sheet1!A1:D20' --json
+gog sheets update <spreadsheetId> 'Sheet1!B13' --values-json @formula.json --fail-on-formula-error --json
 gog sheets batch-update <spreadsheetId> --data-json @updates.json --json
 gog sheets table list <spreadsheetId>
 gog sheets table append <spreadsheetId> Tasks 'Ship README|done'

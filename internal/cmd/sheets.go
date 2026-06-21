@@ -10,6 +10,7 @@ import (
 	"google.golang.org/api/sheets/v4"
 
 	"github.com/steipete/gogcli/internal/outfmt"
+	"github.com/steipete/gogcli/internal/sheetsa1"
 	"github.com/steipete/gogcli/internal/sheetsvalues"
 	"github.com/steipete/gogcli/internal/ui"
 )
@@ -174,8 +175,9 @@ type SheetsUpdateCmd struct {
 	Range              string   `arg:"" name:"range" help:"Range (A1 notation or named range name; e.g. Sheet1!A1:B2 or MyNamedRange)"`
 	Values             []string `arg:"" optional:"" name:"values" help:"Values (comma-separated rows, pipe-separated cells)"`
 	ValueInput         string   `name:"input" help:"Value input option: RAW or USER_ENTERED" default:"USER_ENTERED"`
-	ValuesJSON         string   `name:"values-json" help:"Values as JSON 2D array"`
+	ValuesJSON         string   `name:"values-json" help:"Values as a JSON 2D array, @file, or @- for stdin"`
 	CopyValidationFrom string   `name:"copy-validation-from" help:"Copy data validation from an A1 range or named range (e.g. 'Sheet1!A2:D2' or MyNamedRange) to the updated cells"`
+	FailOnFormulaError bool     `name:"fail-on-formula-error" help:"Read back the updated range and fail if any cell has a Sheets formula error"`
 }
 
 func (c *SheetsUpdateCmd) Run(ctx context.Context, flags *RootFlags) error {
@@ -191,7 +193,6 @@ func (c *SheetsUpdateCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	var values [][]interface{}
-
 	switch {
 	case strings.TrimSpace(c.ValuesJSON) != "":
 		b, err := resolveInlineOrFileBytes(c.ValuesJSON, stdinReader(ctx))
@@ -221,6 +222,7 @@ func (c *SheetsUpdateCmd) Run(ctx context.Context, flags *RootFlags) error {
 		"value_input_option":      valueInputOption,
 		"copy_validation_from":    strings.TrimSpace(c.CopyValidationFrom),
 		"copy_validation_to_hint": "updatedRange",
+		"fail_on_formula_error":   c.FailOnFormulaError,
 	}); err != nil {
 		return err
 	}
@@ -251,22 +253,111 @@ func (c *SheetsUpdateCmd) Run(ctx context.Context, flags *RootFlags) error {
 		if strings.TrimSpace(resp.UpdatedRange) == "" {
 			return fmt.Errorf("update response missing updated range for validation copy")
 		}
-		if err := copyDataValidation(ctx, svc, spreadsheetID, c.CopyValidationFrom, resp.UpdatedRange); err != nil {
-			return err
+		if copyErr := copyDataValidation(ctx, svc, spreadsheetID, c.CopyValidationFrom, resp.UpdatedRange); copyErr != nil {
+			return copyErr
 		}
 	}
 
+	formulaErrors := make([]sheetsFormulaError, 0)
+	if c.FailOnFormulaError {
+		if strings.TrimSpace(resp.UpdatedRange) == "" {
+			return fmt.Errorf("update response missing updated range for formula verification")
+		}
+		formulaErrors, err = readSheetsFormulaErrors(ctx, svc, spreadsheetID, resp.UpdatedRange)
+		if err != nil {
+			return fmt.Errorf("verify updated formulas: %w", err)
+		}
+	}
+
+	result := map[string]any{
+		"updatedRange":   resp.UpdatedRange,
+		"updatedRows":    resp.UpdatedRows,
+		"updatedColumns": resp.UpdatedColumns,
+		"updatedCells":   resp.UpdatedCells,
+	}
+	if c.FailOnFormulaError {
+		result["formulaErrors"] = formulaErrors
+	}
+
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(ctx, stdoutWriter(ctx), map[string]any{
-			"updatedRange":   resp.UpdatedRange,
-			"updatedRows":    resp.UpdatedRows,
-			"updatedColumns": resp.UpdatedColumns,
-			"updatedCells":   resp.UpdatedCells,
-		})
+		if err := outfmt.WriteJSON(ctx, stdoutWriter(ctx), result); err != nil {
+			return err
+		}
+		if len(formulaErrors) > 0 {
+			return sheetsFormulaVerificationError(formulaErrors)
+		}
+		return nil
 	}
 
 	u.Out().Linef("Updated %d cells in %s", resp.UpdatedCells, resp.UpdatedRange)
+	if len(formulaErrors) > 0 {
+		return sheetsFormulaVerificationError(formulaErrors)
+	}
 	return nil
+}
+
+type sheetsFormulaError struct {
+	Cell    string `json:"cell"`
+	Type    string `json:"type"`
+	Message string `json:"message,omitempty"`
+}
+
+func readSheetsFormulaErrors(ctx context.Context, svc *sheets.Service, spreadsheetID, updatedRange string) ([]sheetsFormulaError, error) {
+	spreadsheet, err := svc.Spreadsheets.Get(spreadsheetID).
+		Ranges(updatedRange).
+		IncludeGridData(true).
+		Fields("sheets(properties(title),data(startRow,startColumn,rowData(values(effectiveValue(errorValue)))))").
+		Context(ctx).
+		Do()
+	if err != nil {
+		return nil, err
+	}
+
+	formulaErrors := make([]sheetsFormulaError, 0)
+	for _, sheet := range spreadsheet.Sheets {
+		if sheet == nil {
+			continue
+		}
+		title := ""
+		if sheet.Properties != nil {
+			title = sheet.Properties.Title
+		}
+		for _, grid := range sheet.Data {
+			if grid == nil {
+				continue
+			}
+			for rowOffset, row := range grid.RowData {
+				if row == nil {
+					continue
+				}
+				for columnOffset, cell := range row.Values {
+					if cell == nil || cell.EffectiveValue == nil || cell.EffectiveValue.ErrorValue == nil {
+						continue
+					}
+					formulaErrors = append(formulaErrors, sheetsFormulaError{
+						Cell: sheetsa1.FormatCell(
+							title,
+							int(grid.StartRow)+rowOffset+1,
+							int(grid.StartColumn)+columnOffset+1,
+						),
+						Type:    cell.EffectiveValue.ErrorValue.Type,
+						Message: cell.EffectiveValue.ErrorValue.Message,
+					})
+				}
+			}
+		}
+	}
+
+	return formulaErrors, nil
+}
+
+func sheetsFormulaVerificationError(formulaErrors []sheetsFormulaError) error {
+	parts := make([]string, 0, len(formulaErrors))
+	for _, formulaError := range formulaErrors {
+		parts = append(parts, fmt.Sprintf("%s (%s): %s", formulaError.Cell, formulaError.Type, formulaError.Message))
+	}
+
+	return fmt.Errorf("formula verification failed: %s", strings.Join(parts, "; "))
 }
 
 type SheetsBatchUpdateCmd struct {
