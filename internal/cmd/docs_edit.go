@@ -484,9 +484,6 @@ func (c *DocsFindReplaceCmd) Run(ctx context.Context, flags *RootFlags) error {
 	if format == "" {
 		format = docsContentFormatPlain
 	}
-	if c.TabID != "" && format == docsContentFormatMarkdown {
-		return usage("--tab-id is not yet supported with --format markdown")
-	}
 
 	account, err := requireAccount(flags)
 	if err != nil {
@@ -601,7 +598,7 @@ func (c *DocsFindReplaceCmd) runMarkdown(ctx context.Context, svc *docs.Service,
 	if basePath == "" {
 		basePath = "."
 	}
-	return replaceDocsMarkdownRange(ctx, svc, account, doc, startIdx, endIdx, replaceText, basePath)
+	return replaceDocsMarkdownRange(ctx, svc, account, doc, startIdx, endIdx, replaceText, basePath, c.TabID)
 }
 
 func (c *DocsFindReplaceCmd) printFirstResult(ctx context.Context, u *ui.UI, docID, replaceText string, replacements, total int) error {

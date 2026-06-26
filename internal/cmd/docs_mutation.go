@@ -103,21 +103,21 @@ func replaceDocsTextRange(ctx context.Context, svc *docs.Service, doc *docs.Docu
 	return nil
 }
 
-func replaceDocsMarkdownRange(ctx context.Context, svc *docs.Service, account string, doc *docs.Document, startIdx, endIdx int64, replaceText, basePath string) error {
+func replaceDocsMarkdownRange(ctx context.Context, svc *docs.Service, account string, doc *docs.Document, startIdx, endIdx int64, replaceText, basePath, tabID string) error {
 	cleaned, images := extractMarkdownImages(replaceText)
 	elements := ParseMarkdown(cleaned)
-	formattingRequests, textToInsert, tables := MarkdownToDocsRequests(elements, startIdx)
+	formattingRequests, textToInsert, tables := MarkdownToDocsRequests(elements, startIdx, tabID)
 
 	requests := make([]*docs.Request, 0, 2+len(formattingRequests))
 	requests = append(requests,
 		&docs.Request{
 			DeleteContentRange: &docs.DeleteContentRangeRequest{
-				Range: &docs.Range{StartIndex: startIdx, EndIndex: endIdx},
+				Range: &docs.Range{StartIndex: startIdx, EndIndex: endIdx, TabId: tabID},
 			},
 		},
 		&docs.Request{
 			InsertText: &docs.InsertTextRequest{
-				Location: &docs.Location{Index: startIdx},
+				Location: &docs.Location{Index: startIdx, TabId: tabID},
 				Text:     textToInsert,
 			},
 		},
