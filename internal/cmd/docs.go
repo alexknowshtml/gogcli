@@ -25,6 +25,7 @@ type DocsCmd struct {
 	Cat         DocsCatCmd         `cmd:"" name:"cat" aliases:"text,read" help:"Print a Google Doc as plain text"`
 	Comments    DocsCommentsCmd    `cmd:"" name:"comments" help:"Manage comments on files"`
 	ListTabs    DocsListTabsCmd    `cmd:"" name:"list-tabs" help:"List all tabs in a Google Doc"`
+	AddTab      DocsAddTabCmd      `cmd:"" name:"add-tab" help:"Add a new tab to a Google Doc"`
 	Write       DocsWriteCmd       `cmd:"" name:"write" help:"Write content to a Google Doc"`
 	Insert      DocsInsertCmd      `cmd:"" name:"insert" help:"Insert text at a specific position"`
 	Delete      DocsDeleteCmd      `cmd:"" name:"delete" help:"Delete text range from document"`
