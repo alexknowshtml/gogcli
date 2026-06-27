@@ -16,13 +16,28 @@ type TableData struct {
 	Cells      [][]string
 }
 
+// BulletData represents a bullet/checkbox range to be applied after text insertion
+type BulletData struct {
+	StartIndex   int64
+	EndIndex     int64
+	BulletPreset string // e.g., "BULLET_DISC_CIRCLE_SQUARE" or "BULLET_CHECKBOX"
+}
+
+// HRuleData represents a horizontal rule to be styled after text insertion
+type HRuleData struct {
+	StartIndex int64
+	EndIndex   int64
+}
+
 // MarkdownToDocsRequests converts parsed markdown elements to Google Docs batch
 // update requests. baseIndex is the insertion location in the document.
-// Returns: requests, plainText, tableData (for native table insertion)
-func MarkdownToDocsRequests(elements []MarkdownElement, baseIndex int64, tabID string) ([]*docs.Request, string, []TableData) {
+// Returns: requests, plainText, tableData, bulletData, hruleData
+func MarkdownToDocsRequests(elements []MarkdownElement, baseIndex int64, tabID string) ([]*docs.Request, string, []TableData, []BulletData, []HRuleData) {
 	var requests []*docs.Request
 	var plainText strings.Builder
 	var tables []TableData
+	var bullets []BulletData
+	var hrules []HRuleData
 	charOffset := baseIndex
 
 	if debugMarkdown {
@@ -167,31 +182,71 @@ func MarkdownToDocsRequests(elements []MarkdownElement, baseIndex int64, tabID s
 				fmt.Printf("[LIST] Content: %q -> stripped=%q styles=%d\n", el.Content, strippedContent, len(styles))
 			}
 
-			// Add list item with prefix
-			prefix := "• "
-			if el.Type == MDNumberedList {
-				prefix = "1. "
-			}
-			prefixLen := utf16Len(prefix)
-			plainText.WriteString(prefix)
+			// Add list item text (no prefix - bullets applied via CreateParagraphBullets)
 			plainText.WriteString(strippedContent)
 			plainText.WriteString("\n")
-			charOffset += prefixLen + utf16Len(strippedContent+"\n")
+			endOffset := startOffset + utf16Len(strippedContent+"\n")
+			charOffset = endOffset
 
-			// Apply inline text styles (offset by prefix length)
+			// Track bullet range for deferred application
+			preset := "BULLET_DISC_CIRCLE_SQUARE"
+			if el.Type == MDNumberedList {
+				preset = "NUMBERED_DECIMAL_ALPHA_ROMAN"
+			}
+			bullets = append(bullets, BulletData{
+				StartIndex:   startOffset,
+				EndIndex:     endOffset,
+				BulletPreset: preset,
+			})
+
+			// Apply inline text styles
 			for _, style := range styles {
-				textStyleReq := buildTextStyleRequest(style, startOffset+prefixLen, tabID)
+				textStyleReq := buildTextStyleRequest(style, startOffset, tabID)
+				if textStyleReq != nil {
+					requests = append(requests, textStyleReq)
+				}
+			}
+
+		case MDCheckboxUnchecked, MDCheckboxChecked:
+			// Parse inline formatting for checkbox item content
+			styles, strippedContent := ParseInlineFormatting(el.Content)
+
+			if debugMarkdown {
+				fmt.Printf("[CHECKBOX] Content: %q -> stripped=%q checked=%v\n", el.Content, strippedContent, el.Type == MDCheckboxChecked)
+			}
+
+			// Add checkbox item text (checkbox applied via CreateParagraphBullets with BULLET_CHECKBOX)
+			plainText.WriteString(strippedContent)
+			plainText.WriteString("\n")
+			endOffset := startOffset + utf16Len(strippedContent+"\n")
+			charOffset = endOffset
+
+			// Track checkbox range for deferred application
+			bullets = append(bullets, BulletData{
+				StartIndex:   startOffset,
+				EndIndex:     endOffset,
+				BulletPreset: "BULLET_CHECKBOX",
+			})
+
+			// Apply inline text styles
+			for _, style := range styles {
+				textStyleReq := buildTextStyleRequest(style, startOffset, tabID)
 				if textStyleReq != nil {
 					requests = append(requests, textStyleReq)
 				}
 			}
 
 		case MDHorizontalRule:
-			// Add horizontal rule as a separator line using ASCII dashes
-			separator := strings.Repeat("-", 40)
-			plainText.WriteString(separator)
-			plainText.WriteString("\n")
-			charOffset += utf16Len(separator + "\n")
+			// Add a single space as placeholder for the horizontal rule border
+			plainText.WriteString(" \n")
+			endOffset := startOffset + utf16Len(" \n")
+			charOffset = endOffset
+
+			// Track hrule range for deferred border styling
+			hrules = append(hrules, HRuleData{
+				StartIndex: startOffset,
+				EndIndex:   endOffset,
+			})
 
 		case MDParagraph:
 			// Parse inline formatting for paragraph content
@@ -264,10 +319,12 @@ func MarkdownToDocsRequests(elements []MarkdownElement, baseIndex int64, tabID s
 		fmt.Printf("[FINAL] Final charOffset: %d\n", charOffset)
 		fmt.Printf("[FINAL] Total requests: %d\n", len(requests))
 		fmt.Printf("[FINAL] Total tables: %d\n", len(tables))
+		fmt.Printf("[FINAL] Total bullets: %d\n", len(bullets))
+		fmt.Printf("[FINAL] Total hrules: %d\n", len(hrules))
 		fmt.Printf("\n[FINAL] plainText content:\n%s\n[END]\n", plainText.String())
 	}
 
-	return requests, plainText.String(), tables
+	return requests, plainText.String(), tables, bullets, hrules
 }
 
 // buildTextStyleRequest creates a text style update request from a TextStyle
@@ -300,6 +357,10 @@ func buildTextStyleRequest(style TextStyle, baseOffset int64, tabID string) *doc
 			Url: style.Link,
 		}
 		fields = append(fields, "link")
+	}
+	if style.Strikethrough {
+		textStyle.Strikethrough = true
+		fields = append(fields, "strikethrough")
 	}
 
 	if len(fields) == 0 {

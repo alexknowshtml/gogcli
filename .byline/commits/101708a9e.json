@@ -1,0 +1,35 @@
+{
+  "sha": "101708a9ee84591fe1682185fae4cbcf9139c289",
+  "shortSha": "101708a9e",
+  "parentSha": "80343408a49a08374e52484155dd4f09618e8eff",
+  "timestamp": "2026-06-19T13:19:21Z",
+  "message": "feat(sheets): add --safe-formula and --verify flags to update command",
+  "files": {
+    "internal/cmd/sheets.go": {
+      "path": "internal/cmd/sheets.go",
+      "summary": {
+        "mine": 20507,
+        "machine": 0,
+        "ours": 0
+      },
+      "segments": []
+    }
+  },
+  "totals": {
+    "mine": 20507,
+    "machine": 0,
+    "ours": 0,
+    "percent": {
+      "mine": 100,
+      "machine": 0,
+      "ours": 0
+    }
+  },
+  "sessions": [],
+  "meta": {
+    "analyzedAt": "2026-06-19T13:19:21.471Z",
+    "version": "0.2.0",
+    "retroactive": false,
+    "confidence": 1
+  }
+}

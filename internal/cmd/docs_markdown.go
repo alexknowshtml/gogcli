@@ -32,6 +32,8 @@ const (
 	MDImage
 	MDListItem
 	MDNumberedList
+	MDCheckboxUnchecked // - [ ] item
+	MDCheckboxChecked   // - [x] item
 	MDBlockquote
 	MDHorizontalRule
 	MDParagraph
@@ -51,12 +53,13 @@ type MarkdownElement struct {
 
 // TextStyle represents text formatting
 type TextStyle struct {
-	Bold   bool
-	Italic bool
-	Code   bool
-	Link   string
-	Start  int64
-	End    int64
+	Bold          bool
+	Italic        bool
+	Code          bool
+	Strikethrough bool
+	Link          string
+	Start         int64
+	End           int64
 }
 
 // ParagraphStyle represents paragraph-level formatting
@@ -162,6 +165,25 @@ func ParseMarkdown(text string) []MarkdownElement {
 			elements = append(elements, MarkdownElement{
 				Type:    MDNumberedList,
 				Content: match[2],
+			})
+			continue
+		}
+
+		// Checkbox list items - [ ] or - [x] or - [X]
+		if strings.HasPrefix(line, "- [ ] ") || strings.HasPrefix(line, "* [ ] ") {
+			content := strings.TrimPrefix(strings.TrimPrefix(line, "- [ ] "), "* [ ] ")
+			elements = append(elements, MarkdownElement{
+				Type:    MDCheckboxUnchecked,
+				Content: content,
+			})
+			continue
+		}
+		if strings.HasPrefix(line, "- [x] ") || strings.HasPrefix(line, "- [X] ") ||
+			strings.HasPrefix(line, "* [x] ") || strings.HasPrefix(line, "* [X] ") {
+			content := line[6:] // All variants are 6 chars: "- [x] "
+			elements = append(elements, MarkdownElement{
+				Type:    MDCheckboxChecked,
+				Content: content,
 			})
 			continue
 		}
@@ -327,6 +349,17 @@ func ParseInlineFormatting(text string) ([]TextStyle, string) {
 		})
 	}
 
+	// Find strikethrough ~~text~~
+	strikeRegex := regexp.MustCompile(`~~([^~]+)~~`)
+	for _, idx := range strikeRegex.FindAllStringSubmatchIndex(text, -1) {
+		matches = append(matches, InlineMatch{
+			Start:   idx[0],
+			End:     idx[1],
+			Content: text[idx[2]:idx[3]],
+			Type:    "strikethrough",
+		})
+	}
+
 	// Find bold-italic ***text***
 	biRegex := regexp.MustCompile(`\*\*\*([^*]+)\*\*\*`)
 	for _, idx := range biRegex.FindAllStringSubmatchIndex(text, -1) {
@@ -443,12 +476,13 @@ func ParseInlineFormatting(text string) ([]TextStyle, string) {
 	styles := make([]TextStyle, 0, len(matches))
 	for _, m := range matches {
 		styles = append(styles, TextStyle{
-			Start:  positionMap[m.Start],
-			End:    positionMap[m.End],
-			Bold:   m.Type == fmtBold || m.Type == fmtBoldItalic,
-			Italic: m.Type == "italic" || m.Type == fmtBoldItalic,
-			Code:   m.Type == inlineTypeCode,
-			Link:   m.URL,
+			Start:         positionMap[m.Start],
+			End:           positionMap[m.End],
+			Bold:          m.Type == fmtBold || m.Type == fmtBoldItalic,
+			Italic:        m.Type == "italic" || m.Type == fmtBoldItalic,
+			Code:          m.Type == inlineTypeCode,
+			Strikethrough: m.Type == "strikethrough",
+			Link:          m.URL,
 		})
 	}
 

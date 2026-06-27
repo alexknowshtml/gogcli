@@ -1,0 +1,62 @@
+{
+  "sha": "1d69f1c1c2e9842c27d45c63534b64f94bfac487",
+  "shortSha": "1d69f1c1c",
+  "parentSha": "101708a9ee84591fe1682185fae4cbcf9139c289",
+  "timestamp": "2026-06-26T20:56:00Z",
+  "message": "fix(docs): propagate tabID through markdown formatter for multi-tab writes",
+  "files": {
+    "internal/cmd/docs_edit.go": {
+      "path": "internal/cmd/docs_edit.go",
+      "summary": {
+        "mine": 18368,
+        "machine": 0,
+        "ours": 0
+      },
+      "segments": []
+    },
+    "internal/cmd/docs_formatter.go": {
+      "path": "internal/cmd/docs_formatter.go",
+      "summary": {
+        "mine": 9528,
+        "machine": 0,
+        "ours": 0
+      },
+      "segments": []
+    },
+    "internal/cmd/docs_formatter_test.go": {
+      "path": "internal/cmd/docs_formatter_test.go",
+      "summary": {
+        "mine": 1198,
+        "machine": 0,
+        "ours": 0
+      },
+      "segments": []
+    },
+    "internal/cmd/docs_mutation.go": {
+      "path": "internal/cmd/docs_mutation.go",
+      "summary": {
+        "mine": 7146,
+        "machine": 0,
+        "ours": 0
+      },
+      "segments": []
+    }
+  },
+  "totals": {
+    "mine": 36240,
+    "machine": 0,
+    "ours": 0,
+    "percent": {
+      "mine": 100,
+      "machine": 0,
+      "ours": 0
+    }
+  },
+  "sessions": [],
+  "meta": {
+    "analyzedAt": "2026-06-26T20:56:00.259Z",
+    "version": "0.2.0",
+    "retroactive": false,
+    "confidence": 1
+  }
+}

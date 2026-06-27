@@ -1,0 +1,53 @@
+{
+  "sha": "7afba71163d7f1f95e324913844df10b26b7ab42",
+  "shortSha": "7afba7116",
+  "parentSha": "d2e0bd74809d8c6f4f4000f2073d0ffc8bf05329",
+  "timestamp": "2026-04-22T00:47:21-04:00",
+  "message": "Remove byline attribution cache — experiment retired",
+  "files": {
+    ".byline/commits/bfd4f9390.json": {
+      "path": ".byline/commits/bfd4f9390.json",
+      "summary": {
+        "mine": 2543,
+        "machine": 0,
+        "ours": 0
+      },
+      "segments": []
+    },
+    ".byline/commits/cb5499ed7.json": {
+      "path": ".byline/commits/cb5499ed7.json",
+      "summary": {
+        "mine": 2493,
+        "machine": 0,
+        "ours": 0
+      },
+      "segments": []
+    },
+    ".byline/commits/d9e935903.json": {
+      "path": ".byline/commits/d9e935903.json",
+      "summary": {
+        "mine": 604,
+        "machine": 0,
+        "ours": 0
+      },
+      "segments": []
+    }
+  },
+  "totals": {
+    "mine": 5640,
+    "machine": 0,
+    "ours": 0,
+    "percent": {
+      "mine": 100,
+      "machine": 0,
+      "ours": 0
+    }
+  },
+  "sessions": [],
+  "meta": {
+    "analyzedAt": "2026-06-19T13:35:10.899Z",
+    "version": "0.2.0",
+    "retroactive": false,
+    "confidence": 1
+  }
+}

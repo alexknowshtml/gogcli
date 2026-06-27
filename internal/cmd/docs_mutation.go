@@ -106,7 +106,7 @@ func replaceDocsTextRange(ctx context.Context, svc *docs.Service, doc *docs.Docu
 func replaceDocsMarkdownRange(ctx context.Context, svc *docs.Service, account string, doc *docs.Document, startIdx, endIdx int64, replaceText, basePath, tabID string) error {
 	cleaned, images := extractMarkdownImages(replaceText)
 	elements := ParseMarkdown(cleaned)
-	formattingRequests, textToInsert, tables := MarkdownToDocsRequests(elements, startIdx, tabID)
+	formattingRequests, textToInsert, tables, bullets, hrules := MarkdownToDocsRequests(elements, startIdx, tabID)
 
 	requests := make([]*docs.Request, 0, 2+len(formattingRequests))
 	requests = append(requests,
@@ -130,6 +130,64 @@ func replaceDocsMarkdownRange(ctx context.Context, svc *docs.Service, account st
 	}).Context(ctx).Do()
 	if err != nil {
 		return fmt.Errorf("replace (markdown): %w", err)
+	}
+
+	// Apply bullets and checkboxes (must be done after text insertion)
+	if len(bullets) > 0 {
+		bulletReqs := make([]*docs.Request, 0, len(bullets))
+		for _, b := range bullets {
+			bulletReqs = append(bulletReqs, &docs.Request{
+				CreateParagraphBullets: &docs.CreateParagraphBulletsRequest{
+					Range: &docs.Range{
+						StartIndex: b.StartIndex,
+						EndIndex:   b.EndIndex,
+						TabId:      tabID,
+					},
+					BulletPreset: b.BulletPreset,
+				},
+			})
+		}
+		_, bulletErr := svc.Documents.BatchUpdate(doc.DocumentId, &docs.BatchUpdateDocumentRequest{
+			Requests: bulletReqs,
+		}).Context(ctx).Do()
+		if bulletErr != nil {
+			return fmt.Errorf("apply bullets: %w", bulletErr)
+		}
+	}
+
+	// Apply horizontal rule borders (must be done after text insertion)
+	if len(hrules) > 0 {
+		hruleReqs := make([]*docs.Request, 0, len(hrules))
+		for _, hr := range hrules {
+			hruleReqs = append(hruleReqs, &docs.Request{
+				UpdateParagraphStyle: &docs.UpdateParagraphStyleRequest{
+					Range: &docs.Range{
+						StartIndex: hr.StartIndex,
+						EndIndex:   hr.EndIndex,
+						TabId:      tabID,
+					},
+					ParagraphStyle: &docs.ParagraphStyle{
+						BorderBottom: &docs.ParagraphBorder{
+							Color: &docs.OptionalColor{
+								Color: &docs.Color{
+									RgbColor: &docs.RgbColor{Red: 0.8, Green: 0.8, Blue: 0.8},
+								},
+							},
+							Width:     &docs.Dimension{Magnitude: 1, Unit: "PT"},
+							DashStyle: "SOLID",
+							Padding:   &docs.Dimension{Magnitude: 6, Unit: "PT"},
+						},
+					},
+					Fields: "borderBottom",
+				},
+			})
+		}
+		_, hruleErr := svc.Documents.BatchUpdate(doc.DocumentId, &docs.BatchUpdateDocumentRequest{
+			Requests: hruleReqs,
+		}).Context(ctx).Do()
+		if hruleErr != nil {
+			return fmt.Errorf("apply hrules: %w", hruleErr)
+		}
 	}
 
 	if len(tables) > 0 {
