@@ -464,6 +464,12 @@ func (c *CalendarUpdateCmd) applyTimeFields(kctx *kong.Context, patch *calendar.
 }
 
 func (c *CalendarUpdateCmd) applyAttendees(kctx *kong.Context, patch *calendar.Event) bool {
+	// Support "CLEAR" sentinel since kong doesn't track empty-string flags in path
+	if strings.EqualFold(c.Attendees, "CLEAR") {
+		patch.Attendees = []*calendar.EventAttendee{}
+		patch.ForceSendFields = append(patch.ForceSendFields, "Attendees")
+		return true
+	}
 	if !flagProvided(kctx, "attendees") {
 		return false
 	}
