@@ -23,4 +23,6 @@ type CalendarCmd struct {
 	FocusTime       CalendarFocusTimeCmd       `cmd:"" name:"focus-time" aliases:"focus" help:"Create a Focus Time block"`
 	OOO             CalendarOOOCmd             `cmd:"" name:"out-of-office" aliases:"ooo" help:"Create an Out of Office event"`
 	WorkingLocation CalendarWorkingLocationCmd `cmd:"" name:"working-location" aliases:"wl" help:"Set working location (home/office/custom)"`
+	Watch           CalendarWatchCmd           `cmd:"" name:"watch" help:"Register a push notification channel for calendar events"`
+	Unwatch         CalendarUnwatchCmd         `cmd:"" name:"unwatch" aliases:"channel-stop" help:"Stop a push notification channel"`
 }
