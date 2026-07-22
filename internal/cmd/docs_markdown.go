@@ -107,8 +107,11 @@ func ParseMarkdown(text string) []MarkdownElement {
 			continue
 		}
 
-		// Empty line
+		// Empty line - emit as paragraph break (consecutive blanks collapse to one)
 		if strings.TrimSpace(line) == "" {
+			if len(elements) > 0 && elements[len(elements)-1].Type != MDEmptyLine {
+				elements = append(elements, MarkdownElement{Type: MDEmptyLine})
+			}
 			continue
 		}
 
