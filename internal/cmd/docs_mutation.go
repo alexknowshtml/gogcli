@@ -103,25 +103,48 @@ func replaceDocsTextRange(ctx context.Context, svc *docs.Service, doc *docs.Docu
 	return nil
 }
 
-func replaceDocsMarkdownRange(ctx context.Context, svc *docs.Service, account string, doc *docs.Document, startIdx, endIdx int64, replaceText, basePath string) error {
+// applyTabIDToRequests stamps tabID onto every Range and Location within a
+// slice of Docs API requests so they target a specific tab.
+func applyTabIDToRequests(reqs []*docs.Request, tabID string) {
+	if tabID == "" {
+		return
+	}
+	for _, req := range reqs {
+		if req.UpdateParagraphStyle != nil && req.UpdateParagraphStyle.Range != nil {
+			req.UpdateParagraphStyle.Range.TabId = tabID
+		}
+		if req.UpdateTextStyle != nil && req.UpdateTextStyle.Range != nil {
+			req.UpdateTextStyle.Range.TabId = tabID
+		}
+		if req.InsertText != nil && req.InsertText.Location != nil {
+			req.InsertText.Location.TabId = tabID
+		}
+		if req.DeleteContentRange != nil && req.DeleteContentRange.Range != nil {
+			req.DeleteContentRange.Range.TabId = tabID
+		}
+	}
+}
+
+func replaceDocsMarkdownRange(ctx context.Context, svc *docs.Service, account string, doc *docs.Document, startIdx, endIdx int64, replaceText, basePath, tabID string) error {
 	cleaned, images := extractMarkdownImages(replaceText)
 	elements := ParseMarkdown(cleaned)
 	formattingRequests, textToInsert, tables := MarkdownToDocsRequests(elements, startIdx)
 
 	requests := make([]*docs.Request, 0, 2+len(formattingRequests))
-	requests = append(requests,
-		&docs.Request{
+	if endIdx > startIdx {
+		requests = append(requests, &docs.Request{
 			DeleteContentRange: &docs.DeleteContentRangeRequest{
-				Range: &docs.Range{StartIndex: startIdx, EndIndex: endIdx},
+				Range: &docs.Range{StartIndex: startIdx, EndIndex: endIdx, TabId: tabID},
 			},
+		})
+	}
+	requests = append(requests, &docs.Request{
+		InsertText: &docs.InsertTextRequest{
+			Location: &docs.Location{Index: startIdx, TabId: tabID},
+			Text:     textToInsert,
 		},
-		&docs.Request{
-			InsertText: &docs.InsertTextRequest{
-				Location: &docs.Location{Index: startIdx},
-				Text:     textToInsert,
-			},
-		},
-	)
+	})
+	applyTabIDToRequests(formattingRequests, tabID)
 	requests = append(requests, formattingRequests...)
 
 	_, err := svc.Documents.BatchUpdate(doc.DocumentId, &docs.BatchUpdateDocumentRequest{

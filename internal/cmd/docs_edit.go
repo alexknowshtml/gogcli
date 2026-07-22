@@ -152,6 +152,65 @@ func (c *DocsWriteCmd) writePlainTextResult(ctx context.Context, resp *docs.Batc
 	return nil
 }
 
+func (c *DocsWriteCmd) writeMarkdownToTab(ctx context.Context, flags *RootFlags, docID, content string) error {
+	u := ui.FromContext(ctx)
+
+	svc, err := requireDocsService(ctx, flags)
+	if err != nil {
+		return err
+	}
+	account, err := requireAccount(flags)
+	if err != nil {
+		return err
+	}
+
+	endIndex, err := docsTargetEndIndex(ctx, svc, docID, c.TabID)
+	if err != nil {
+		return err
+	}
+	loaded, err := loadDocsTargetDocument(ctx, svc, docID, c.TabID)
+	if err != nil {
+		return err
+	}
+
+	basePath := c.File
+	if basePath == "" {
+		basePath = "."
+	}
+	startIdx := int64(1)
+	endIdx := endIndex - 1
+
+	if err := replaceDocsMarkdownRange(ctx, svc, account, loaded.target, startIdx, endIdx, content, basePath, c.TabID); err != nil {
+		return err
+	}
+	if err := c.applyPageless(ctx, svc, docID); err != nil {
+		return err
+	}
+
+	if outfmt.IsJSON(ctx) {
+		payload := map[string]any{
+			"documentId": docID,
+			"written":    len(content),
+			"replaced":   true,
+			"markdown":   true,
+			"tabId":      c.TabID,
+		}
+		if c.Pageless {
+			payload["pageless"] = true
+		}
+		return outfmt.WriteJSON(ctx, os.Stdout, payload)
+	}
+
+	u.Out().Printf("documentId\t%s", docID)
+	u.Out().Printf("written\t%d", len(content))
+	u.Out().Printf("mode\treplaced (markdown converted)")
+	u.Out().Printf("tabId\t%s", c.TabID)
+	if c.Pageless {
+		u.Out().Printf("pageless\ttrue")
+	}
+	return nil
+}
+
 func (c *DocsWriteCmd) writeMarkdown(ctx context.Context, flags *RootFlags, docID, content string) error {
 	u := ui.FromContext(ctx)
 
@@ -162,7 +221,7 @@ func (c *DocsWriteCmd) writeMarkdown(ctx context.Context, flags *RootFlags, docI
 		return usage("--markdown cannot be combined with --append")
 	}
 	if c.TabID != "" {
-		return usage("--markdown cannot be combined with --tab-id")
+		return c.writeMarkdownToTab(ctx, flags, docID, content)
 	}
 
 	_, driveSvc, err := requireDriveService(ctx, flags)
@@ -601,7 +660,7 @@ func (c *DocsFindReplaceCmd) runMarkdown(ctx context.Context, svc *docs.Service,
 	if basePath == "" {
 		basePath = "."
 	}
-	return replaceDocsMarkdownRange(ctx, svc, account, doc, startIdx, endIdx, replaceText, basePath)
+	return replaceDocsMarkdownRange(ctx, svc, account, doc, startIdx, endIdx, replaceText, basePath, c.TabID)
 }
 
 func (c *DocsFindReplaceCmd) printFirstResult(ctx context.Context, u *ui.UI, docID, replaceText string, replacements, total int) error {
