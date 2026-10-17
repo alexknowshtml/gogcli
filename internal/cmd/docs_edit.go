@@ -39,6 +39,17 @@ func (c *DocsWriteCmd) Run(ctx context.Context, kctx *kong.Context, flags *RootF
 	if c.Append && c.Replace {
 		return usage("--append cannot be combined with --replace")
 	}
+	if err := dryRunExit(ctx, flags, "docs.write", map[string]any{
+		"documentId": id,
+		"text":       text,
+		"replace":    c.Replace,
+		"markdown":   c.Markdown,
+		"append":     c.Append,
+		"pageless":   c.Pageless,
+		"tabId":      c.TabID,
+	}); err != nil {
+		return err
+	}
 	if c.Markdown {
 		return c.writeMarkdown(ctx, flags, id, text)
 	}
@@ -245,6 +256,16 @@ func (c *DocsUpdateCmd) Run(ctx context.Context, kctx *kong.Context, flags *Root
 		return usage("invalid --index (must be >= 1)")
 	}
 
+	if err := dryRunExit(ctx, flags, "docs.update", map[string]any{
+		"documentId": id,
+		"text":       text,
+		"index":      c.Index,
+		"pageless":   c.Pageless,
+		"tabId":      c.TabID,
+	}); err != nil {
+		return err
+	}
+
 	svc, err := requireDocsService(ctx, flags)
 	if err != nil {
 		return err
@@ -331,6 +352,15 @@ func (c *DocsInsertCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return usage("--index must be >= 1 (index 0 is reserved)")
 	}
 
+	if err := dryRunExit(ctx, flags, "docs.insert", map[string]any{
+		"documentId": docID,
+		"content":    content,
+		"index":      c.Index,
+		"tabId":      c.TabID,
+	}); err != nil {
+		return err
+	}
+
 	svc, err := requireDocsService(ctx, flags)
 	if err != nil {
 		return err
@@ -386,6 +416,15 @@ func (c *DocsDeleteCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 	if c.End <= c.Start {
 		return usage("--end must be greater than --start")
+	}
+
+	if err := dryRunExit(ctx, flags, "docs.delete", map[string]any{
+		"documentId": docID,
+		"startIndex": c.Start,
+		"endIndex":   c.End,
+		"tabId":      c.TabID,
+	}); err != nil {
+		return err
 	}
 
 	svc, err := requireDocsService(ctx, flags)
@@ -486,6 +525,18 @@ func (c *DocsFindReplaceCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 	if c.TabID != "" && format == docsContentFormatMarkdown {
 		return usage("--tab-id is not yet supported with --format markdown")
+	}
+
+	if err := dryRunExit(ctx, flags, "docs.find-replace", map[string]any{
+		"documentId": docID,
+		"find":       c.Find,
+		"replace":    replaceText,
+		"matchCase":  c.MatchCase,
+		"format":     format,
+		"first":      c.First,
+		"tabId":      c.TabID,
+	}); err != nil {
+		return err
 	}
 
 	account, err := requireAccount(flags)

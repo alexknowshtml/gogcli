@@ -3,12 +3,14 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 	"strings"
 	"testing"
 
 	"google.golang.org/api/docs/v1"
+	"google.golang.org/api/drive/v3"
 )
 
 func TestDocsFindReplace_PlainText(t *testing.T) {
@@ -781,5 +783,100 @@ func TestFindTextInDoc_TableCell(t *testing.T) {
 	}
 	if start != 47 || end != 53 {
 		t.Fatalf("expected match at [47,53], got [%d,%d]", start, end)
+	}
+}
+
+func TestDocsFindReplace_DryRunMakesNoAPICalls(t *testing.T) {
+	cases := []struct {
+		name string
+		run  func(ctx context.Context, flags *RootFlags) error
+	}{
+		{"find-replace all", (&DocsFindReplaceCmd{DocID: "doc1", Find: "old", ReplaceText: "new", Format: "plain"}).Run},
+		{"find-replace first", (&DocsFindReplaceCmd{DocID: "doc1", Find: "old", ReplaceText: "new", Format: "plain", First: true}).Run},
+		{"find-replace markdown", (&DocsFindReplaceCmd{DocID: "doc1", Find: "old", ReplaceText: "**new**", Format: "markdown"}).Run},
+		{"edit", (&DocsEditCmd{DocID: "doc1", Find: "old", ReplaceStr: "new"}).Run},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			origDocs := newDocsService
+			t.Cleanup(func() { newDocsService = origDocs })
+			newDocsService = func(context.Context, string) (*docs.Service, error) {
+				t.Fatal("newDocsService should not be called during dry-run")
+				return nil, nil
+			}
+
+			out := captureStdout(t, func() {
+				err := tc.run(newDocsJSONContext(t), &RootFlags{Account: "a@b.com", DryRun: true})
+				var exitErr *ExitError
+				if !errors.As(err, &exitErr) || exitErr.Code != 0 {
+					t.Fatalf("expected dry-run exit 0, got %v", err)
+				}
+			})
+
+			var payload struct {
+				DryRun bool   `json:"dry_run"`
+				Op     string `json:"op"`
+			}
+			if err := json.Unmarshal([]byte(out), &payload); err != nil {
+				t.Fatalf("unmarshal dry-run output %q: %v", out, err)
+			}
+			if !payload.DryRun || payload.Op != "docs.find-replace" {
+				t.Fatalf("unexpected dry-run payload: %+v", payload)
+			}
+		})
+	}
+}
+
+func TestDocsWriteCommands_DryRunMakesNoAPICalls(t *testing.T) {
+	cases := []struct {
+		name string
+		cmd  any
+		args []string
+		op   string
+	}{
+		{"write", &DocsWriteCmd{}, []string{"doc1", "--text", "hello"}, "docs.write"},
+		{"write markdown", &DocsWriteCmd{}, []string{"doc1", "--text", "# hi", "--markdown", "--replace"}, "docs.write"},
+		{"update", &DocsUpdateCmd{}, []string{"doc1", "--text", "hello"}, "docs.update"},
+		{"insert", &DocsInsertCmd{}, []string{"doc1", "hello", "--index", "1"}, "docs.insert"},
+		{"delete", &DocsDeleteCmd{}, []string{"doc1", "--start", "1", "--end", "5"}, "docs.delete"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			origDocs := newDocsService
+			origDrive := newDriveService
+			t.Cleanup(func() {
+				newDocsService = origDocs
+				newDriveService = origDrive
+			})
+			newDocsService = func(context.Context, string) (*docs.Service, error) {
+				t.Fatal("newDocsService should not be called during dry-run")
+				return nil, nil
+			}
+			newDriveService = func(context.Context, string) (*drive.Service, error) {
+				t.Fatal("newDriveService should not be called during dry-run")
+				return nil, nil
+			}
+
+			out := captureStdout(t, func() {
+				err := runKong(t, tc.cmd, tc.args, newDocsJSONContext(t), &RootFlags{Account: "a@b.com", DryRun: true})
+				var exitErr *ExitError
+				if !errors.As(err, &exitErr) || exitErr.Code != 0 {
+					t.Fatalf("expected dry-run exit 0, got %v", err)
+				}
+			})
+
+			var payload struct {
+				DryRun bool   `json:"dry_run"`
+				Op     string `json:"op"`
+			}
+			if err := json.Unmarshal([]byte(out), &payload); err != nil {
+				t.Fatalf("unmarshal dry-run output %q: %v", out, err)
+			}
+			if !payload.DryRun || payload.Op != tc.op {
+				t.Fatalf("unexpected dry-run payload: %+v", payload)
+			}
+		})
 	}
 }
