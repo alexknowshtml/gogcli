@@ -234,6 +234,7 @@ type CalendarUpdateCmd struct {
 	WorkingDeskId         string   `name:"working-desk-id" help:"Working location desk ID"`
 	WorkingCustomLabel    string   `name:"working-custom-label" help:"Working location custom label"`
 	SendUpdates           string   `name:"send-updates" help:"Notification mode: all, externalOnly, none (default: none)"`
+	Status                string   `name:"status" help:"Event status: confirmed, tentative, cancelled (confirmed brings back a cancelled event)"`
 }
 
 func (c *CalendarUpdateCmd) Run(ctx context.Context, kctx *kong.Context, flags *RootFlags) error {
@@ -604,6 +605,15 @@ func (c *CalendarUpdateCmd) applyDisplayOptions(kctx *kong.Context, patch *calen
 		}
 		patch.Transparency = transparency
 		changed = true
+	}
+	if flagProvided(kctx, "status") {
+		switch status := strings.TrimSpace(strings.ToLower(c.Status)); status {
+		case "confirmed", "tentative", "cancelled":
+			patch.Status = status
+			changed = true
+		default:
+			return false, fmt.Errorf("invalid status: %q (must be confirmed, tentative or cancelled)", c.Status)
+		}
 	}
 	return changed, nil
 }
