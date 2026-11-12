@@ -803,7 +803,7 @@ func TestDocsFindReplace_DryRunMakesNoAPICalls(t *testing.T) {
 			t.Cleanup(func() { newDocsService = origDocs })
 			newDocsService = func(context.Context, string) (*docs.Service, error) {
 				t.Fatal("newDocsService should not be called during dry-run")
-				return nil, nil
+				return nil, errors.New("unreachable")
 			}
 
 			out := captureStdout(t, func() {
@@ -852,11 +852,11 @@ func TestDocsWriteCommands_DryRunMakesNoAPICalls(t *testing.T) {
 			})
 			newDocsService = func(context.Context, string) (*docs.Service, error) {
 				t.Fatal("newDocsService should not be called during dry-run")
-				return nil, nil
+				return nil, errors.New("unreachable")
 			}
 			newDriveService = func(context.Context, string) (*drive.Service, error) {
 				t.Fatal("newDriveService should not be called during dry-run")
-				return nil, nil
+				return nil, errors.New("unreachable")
 			}
 
 			out := captureStdout(t, func() {

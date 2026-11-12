@@ -256,14 +256,14 @@ func (c *DocsUpdateCmd) Run(ctx context.Context, kctx *kong.Context, flags *Root
 		return usage("invalid --index (must be >= 1)")
 	}
 
-	if err := dryRunExit(ctx, flags, "docs.update", map[string]any{
+	if dryRunErr := dryRunExit(ctx, flags, "docs.update", map[string]any{
 		"documentId": id,
 		"text":       text,
 		"index":      c.Index,
 		"pageless":   c.Pageless,
 		"tabId":      c.TabID,
-	}); err != nil {
-		return err
+	}); dryRunErr != nil {
+		return dryRunErr
 	}
 
 	svc, err := requireDocsService(ctx, flags)
@@ -352,13 +352,13 @@ func (c *DocsInsertCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return usage("--index must be >= 1 (index 0 is reserved)")
 	}
 
-	if err := dryRunExit(ctx, flags, "docs.insert", map[string]any{
+	if dryRunErr := dryRunExit(ctx, flags, "docs.insert", map[string]any{
 		"documentId": docID,
 		"content":    content,
 		"index":      c.Index,
 		"tabId":      c.TabID,
-	}); err != nil {
-		return err
+	}); dryRunErr != nil {
+		return dryRunErr
 	}
 
 	svc, err := requireDocsService(ctx, flags)
@@ -527,7 +527,7 @@ func (c *DocsFindReplaceCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return usage("--tab-id is not yet supported with --format markdown")
 	}
 
-	if err := dryRunExit(ctx, flags, "docs.find-replace", map[string]any{
+	if dryRunErr := dryRunExit(ctx, flags, "docs.find-replace", map[string]any{
 		"documentId": docID,
 		"find":       c.Find,
 		"replace":    replaceText,
@@ -535,8 +535,8 @@ func (c *DocsFindReplaceCmd) Run(ctx context.Context, flags *RootFlags) error {
 		"format":     format,
 		"first":      c.First,
 		"tabId":      c.TabID,
-	}); err != nil {
-		return err
+	}); dryRunErr != nil {
+		return dryRunErr
 	}
 
 	account, err := requireAccount(flags)
